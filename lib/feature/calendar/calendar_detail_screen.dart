@@ -10,9 +10,18 @@ class CalendarDetailScreen extends StatefulWidget {
   const CalendarDetailScreen({
     super.key,
     required this.initialDate,
+    this.focusHour,
+    this.focusMinute = 0,
   });
 
   final DateTime initialDate;
+
+  /// Jam awal yang ingin difokuskan di timeline (opsional).
+  /// Dipakai saat membuka detail dari kartu jadwal tertentu di Home.
+  final int? focusHour;
+
+  /// Menit awal fokus (default 0).
+  final int focusMinute;
 
   @override
   State<CalendarDetailScreen> createState() => _CalendarDetailScreenState();
@@ -53,7 +62,30 @@ class _CalendarDetailScreenState extends State<CalendarDetailScreen> {
     // Scroll otomatis ke tanggal terpilih setelah render pertama
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToSelectedDate();
+      _scrollTimelineToFocus();
     });
+  }
+
+  /// Gulir timeline ke jam yang difokuskan (dari kartu jadwal Home).
+  void _scrollTimelineToFocus() {
+    final hour = widget.focusHour;
+    if (hour == null) return;
+    if (!_timelineScrollController.hasClients) return;
+
+    // Tinggi tiap jam di timeline = 68.0 (lihat InteractiveTimeline).
+    const double hourHeight = 68.0;
+    final target = (hour * hourHeight) +
+        (widget.focusMinute / 60.0 * hourHeight) -
+        80.0;
+
+    _timelineScrollController.animateTo(
+      target.clamp(
+        0.0,
+        _timelineScrollController.position.maxScrollExtent,
+      ),
+      duration: const Duration(milliseconds: 380),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override

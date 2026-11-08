@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:jadwalin/ui/typography.dart';
 import 'package:jadwalin/feature/calendar/calendar_detail_screen.dart';
 import 'package:jadwalin/ui/color.dart';
+import 'package:jadwalin/ui/shared_widget/all_done_card.dart';
+import 'package:jadwalin/ui/shared_widget/empty_highlight_card.dart';
 import 'package:jadwalin/ui/shared_widget/live_highlight_card.dart';
 import 'package:jadwalin/ui/shared_widget/mini_calendar.dart';
 
@@ -149,18 +152,29 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
   }
 
-  /// Jadwal yang sedang berlangsung, atau yang berikutnya kalau tidak ada.
-  _DummySchedule? get _highlightSchedule {
+  /// Jadwal yang sedang berlangsung atau yang berikutnya HARI INI.
+  /// Jika semua sudah lewat atau kosong, kembalikan null.
+  _DummySchedule? get _activeHighlightSchedule {
     final now = DateTime.now();
     final list = _todaySchedules;
 
+    // 1. Sedang berlangsung sekarang
     for (final s in list) {
       if (now.isAfter(s.start) && now.isBefore(s.end)) return s;
     }
+    // 2. Berikutnya yang belum mulai
     for (final s in list) {
       if (now.isBefore(s.start)) return s;
     }
-    return list.isEmpty ? null : list.last;
+    // 3. Jangan fallback ke list.last (agar tidak muncul kartu abu-abu selesai)
+    return null;
+  }
+
+  /// True jika seluruh jadwal hari ini sudah lewat jamnya.
+  bool get _isAllDoneToday {
+    if (_todaySchedules.isEmpty) return false;
+    final now = DateTime.now();
+    return _todaySchedules.every((s) => now.isAfter(s.end));
   }
 
   @override
@@ -200,21 +214,48 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
 
                       // Live Highlight Spotlight
-                      if (_highlightSchedule != null) ...[
+                      // 1. Sedang ada agenda live / berikutnya -> kartu live aktif
+                      if (_activeHighlightSchedule != null) ...[
                         LiveHighlightCard(
-                          title: _highlightSchedule!.title,
-                          location: _highlightSchedule!.location,
-                          start: _highlightSchedule!.start,
-                          end: _highlightSchedule!.end,
-                          category: _highlightSchedule!.category,
-                          iconAsset: _highlightSchedule!.iconAsset,
-                          accentColor: _highlightSchedule!.accentColor,
+                          title: _activeHighlightSchedule!.title,
+                          location: _activeHighlightSchedule!.location,
+                          start: _activeHighlightSchedule!.start,
+                          end: _activeHighlightSchedule!.end,
+                          category: _activeHighlightSchedule!.category,
+                          iconAsset: _activeHighlightSchedule!.iconAsset,
+                          accentColor: _activeHighlightSchedule!.accentColor,
                         ),
+                        const SizedBox(height: 24),
+                      ]
+                      // 2. Semua agenda hari ini selesai -> kartu sukses hijau reward
+                      else if (_isAllDoneToday) ...[
+                        AllDoneCard(
+                          totalCompleted: _todaySchedules.length,
+                          onViewTomorrow: () {
+                            final tomorrow =
+                                DateTime.now().add(const Duration(days: 1));
+                            setState(() {
+                              _selectedDate = tomorrow;
+                              _currentMonth =
+                                  DateTime(tomorrow.year, tomorrow.month);
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 24),
+                      ]
+                      // 3. Memang belum ada jadwal hari ini -> kartu ajakan buat jadwal
+                      else ...[
+                        const EmptyHighlightCard(),
                         const SizedBox(height: 24),
                       ],
 
                       // Sesi Pagi
-                      _sessionHeader('🌅 Sesi Pagi (05:00 - 11:59)'),
+                      _sessionHeader(
+                        title: 'Sesi Pagi',
+                        timeRange: '05:00 - 11:59',
+                        iconAsset: 'assets/svg/ic_sunrise.svg',
+                        iconColor: const Color(0xFFD97706),
+                      ),
                       const SizedBox(height: 10),
                       _scheduleCard(
                         category: 'KULIAH',
@@ -222,7 +263,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         tagColor: const Color(0xFF2563EB),
                         accentColor: const Color(0xFF2563EB),
                         title: 'Kalkulus & Aljabar Linear',
-                        subtitle: '08:00 - 09:40 WIB • Gedung D (R. 302)',
+                        startTime: '08:00',
+                        endTime: '09:40',
+                        location: 'Gedung D (R. 302)',
+                        startHour: 8,
+                        statusLabel: 'Selesai',
                       ),
                       const SizedBox(height: 10),
                       _scheduleCard(
@@ -231,12 +276,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         tagColor: const Color(0xFF2563EB),
                         accentColor: const Color(0xFF2563EB),
                         title: 'Algoritma & Pemrograman II',
-                        subtitle: '10:00 - 11:40 WIB • Lab Komputer 4',
+                        startTime: '10:00',
+                        endTime: '11:40',
+                        location: 'Lab Komputer 4',
+                        startHour: 10,
+                        statusLabel: 'Berlangsung',
                       ),
                       const SizedBox(height: 24),
 
                       // Sesi Siang
-                      _sessionHeader('☀️ Sesi Siang (12:00 - 17:59)'),
+                      _sessionHeader(
+                        title: 'Sesi Siang',
+                        timeRange: '12:00 - 17:59',
+                        iconAsset: 'assets/svg/ic_sun.svg',
+                        iconColor: const Color(0xFF2563EB),
+                      ),
                       const SizedBox(height: 10),
                       _scheduleCard(
                         category: 'ORGANISASI',
@@ -244,21 +298,22 @@ class _HomeScreenState extends State<HomeScreen> {
                         tagColor: const Color(0xFFD97706),
                         accentColor: const Color(0xFFD97706),
                         title: 'Rapat Finalisasi Rundown Dies Natalis',
-                        subtitle: '13:30 - 15:00 WIB • Sekre BEM Gedung F',
+                        startTime: '13:30',
+                        endTime: '15:00',
+                        location: 'Sekre BEM Gedung F',
+                        startHour: 13,
+                        startMinute: 30,
                         isConflict: true,
+                        statusLabel: 'Bentrok jadwal',
                       ),
                       const SizedBox(height: 24),
 
                       // Sesi Malam
-                      _sessionHeader('🌙 Sesi Malam (18:00 - 23:59)'),
-                      const SizedBox(height: 10),
-                      _scheduleCard(
-                        category: 'BOOTCAMP',
-                        tagBg: const Color(0xFFECFDF5),
-                        tagColor: const Color(0xFF059669),
-                        accentColor: const Color(0xFF059669),
-                        title: 'Flutter & Mobile Development',
-                        subtitle: '19:30 - 21:00 WIB • Online (Google Meet)',
+                      _sessionHeader(
+                        title: 'Sesi Malam',
+                        timeRange: '18:00 - 23:59',
+                        iconAsset: 'assets/svg/ic_moon.svg',
+                        iconColor: const Color(0xFF6366F1),
                       ),
                       const SizedBox(height: 10),
                       _scheduleCard(
@@ -267,7 +322,24 @@ class _HomeScreenState extends State<HomeScreen> {
                         tagColor: const Color(0xFF059669),
                         accentColor: const Color(0xFF059669),
                         title: 'Flutter & Mobile Development',
-                        subtitle: '22.00 - 23:00 WIB • Online (Google Meet)',
+                        startTime: '19:30',
+                        endTime: '21:00',
+                        location: 'Online (Google Meet)',
+                        startHour: 19,
+                        startMinute: 30,
+                        statusLabel: 'Nanti',
+                      ),
+                      const SizedBox(height: 10),
+                      _scheduleCard(
+                        category: 'BOOTCAMP',
+                        tagBg: const Color(0xFFECFDF5),
+                        tagColor: const Color(0xFF059669),
+                        accentColor: const Color(0xFF059669),
+                        title: 'Flutter & Mobile Development',
+                        startTime: '22:00',
+                        endTime: '23:00',
+                        location: 'Online (Google Meet)',
+                        startHour: 22,
                       ),
                     ],
                   ),
@@ -369,129 +441,222 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// 3. Section Session Header (Simple text, no visual noise)
-  Widget _sessionHeader(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontFamily: 'Plus Jakarta Sans',
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: darkEspresso,
-        letterSpacing: -0.1,
+  /// 3. Section Session Header — Icon SVG + Judul + Garis Pembatas + Pill Jam di kanan
+  Widget _sessionHeader({
+    required String title,
+    required String timeRange,
+    required String iconAsset,
+    required Color iconColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Icon lingkaran dengan warna lembut
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: SvgPicture.asset(
+              iconAsset,
+              width: 14,
+              height: 14,
+              colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Judul Sesi (Sesi Pagi, Sesi Siang, Sesi Malam)
+          Text(
+            title,
+            style: smBold.copyWith(
+              color: darkEspresso,
+              letterSpacing: -0.2,
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // Garis tipis divider pembatas horizontal
+          Expanded(
+            child: Container(
+              height: 1,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFFEADBCE),
+                    Color(0x30EADBCE),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // Pill badge jam di kanan
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: oatMilkPill,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFEADBCE), width: 0.8),
+            ),
+            child: Text(
+              timeRange,
+              style: xxxsSemiBold.copyWith(
+                color: mutedTaupe,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  /// 5. Clean Minimalist Schedule Card
+  /// 5. Schedule Card — strip kiri rapi (ikut radius kartu),
+  /// badge kategori di kiri atas, dan label status di kanan atas.
   Widget _scheduleCard({
     required String category,
     required Color tagBg,
     required Color tagColor,
     required Color accentColor,
     required String title,
-    required String subtitle,
+    required String startTime,
+    required String endTime,
+    required String location,
+    required int startHour,
+    int startMinute = 0,
     bool isConflict = false,
+    String? statusLabel,
   }) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isConflict ? const Color(0xFFFCA5A5) : const Color(0xFFEADBCE),
-          width: 1,
-        ),
-      ),
+    final effectiveAccent = isConflict ? errorColor : accentColor;
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openScheduleDetail(startHour, startMinute),
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color:
+                  isConflict ? const Color(0xFFFCA5A5) : const Color(0xFFEADBCE),
+              width: 1,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x08000000),
+                blurRadius: 10,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
       clipBehavior: Clip.antiAlias,
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Left vertical accent indicator bar
-            Container(
-              width: 4.5,
-              color: isConflict ? errorColor : accentColor,
-            ),
+            // Strip aksen kiri. Ikut ter-clip oleh radius kartu karena
+            // `clipBehavior: Clip.antiAlias` pada Container luar.
+            Container(width: 5, color: effectiveAccent),
 
-            // Card Content
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
+                padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Category pill row
+                    // Baris atas: badge kategori + status di kanan
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 2.5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: tagBg,
-                            borderRadius: BorderRadius.circular(5),
-                          ),
-                          child: Text(
-                            category,
-                            style: TextStyle(
-                              fontFamily: 'Plus Jakarta Sans',
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.4,
-                              color: tagColor,
-                            ),
-                          ),
+                        _pill(
+                          label: category,
+                          bg: tagBg,
+                          fg: tagColor,
                         ),
                         if (isConflict) ...[
                           const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2.5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFEE2E2),
-                              borderRadius: BorderRadius.circular(5),
-                            ),
-                            child: const Text(
-                              'Bentrok',
-                              style: TextStyle(
-                                fontFamily: 'Plus Jakarta Sans',
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w700,
-                                color: errorColor,
-                              ),
-                            ),
+                          _pill(
+                            label: 'Bentrok',
+                            bg: const Color(0xFFFEE2E2),
+                            fg: errorColor,
+                            iconAsset: 'assets/svg/ic_triangle_alert.svg',
                           ),
                         ],
+                        const Spacer(),
+                        if (statusLabel != null)
+                          Text(
+                            statusLabel,
+                            style: xxxsSemiBold.copyWith(color: mutedTaupe),
+                          ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 9),
 
-                    // Title
+                    // Judul
                     Text(
                       title,
-                      style: const TextStyle(
-                        fontFamily: 'Plus Jakarta Sans',
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w700,
+                      style: smBold.copyWith(
                         color: darkEspresso,
-                        height: 1.25,
+                        height: 1.3,
                       ),
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 7),
 
-                    // Subtitle (Time & Location)
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontFamily: 'Plus Jakarta Sans',
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w400,
-                        color: mutedTaupe,
-                      ),
+                    // Baris waktu
+                    Row(
+                      children: [
+                        SvgPicture.asset(
+                          'assets/svg/ic_clock.svg',
+                          width: 13,
+                          height: 13,
+                          colorFilter: ColorFilter.mode(
+                            effectiveAccent,
+                            BlendMode.srcIn,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          '$startTime - $endTime WIB',
+                          style: xsSemiBold.copyWith(
+                            color: effectiveAccent,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+
+                    // Baris lokasi
+                    Row(
+                      children: [
+                        SvgPicture.asset(
+                          'assets/svg/ic_location.svg',
+                          width: 13,
+                          height: 13,
+                          colorFilter: const ColorFilter.mode(
+                            mutedTaupe,
+                            BlendMode.srcIn,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            location,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: xsRegular.copyWith(color: mutedTaupe),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -499,6 +664,59 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Buka layar detail kalender & fokus ke jam jadwal yang diketuk.
+  void _openScheduleDetail(int hour, int minute) {
+    final date = _selectedDate ?? DateTime.now();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CalendarDetailScreen(
+          initialDate: date,
+          focusHour: hour,
+          focusMinute: minute,
+        ),
+      ),
+    );
+  }
+
+  /// Badge kecil (kategori / bentrok) dengan opsi ikon SVG.
+  Widget _pill({
+    required String label,
+    required Color bg,
+    required Color fg,
+    String? iconAsset,
+  }) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(iconAsset == null ? 7 : 5, 3, 7, 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (iconAsset != null) ...[
+            SvgPicture.asset(
+              iconAsset,
+              width: 10,
+              height: 10,
+              colorFilter: ColorFilter.mode(fg, BlendMode.srcIn),
+            ),
+            const SizedBox(width: 3),
+          ],
+          Text(
+            label,
+            style: xxxsBold.copyWith(
+              color: fg,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ],
       ),
     );
   }
