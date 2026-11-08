@@ -1,12 +1,28 @@
 import 'dart:ui';
 
-/// Base color (PokéAtlas Design System)
-const Color primaryColor = Color(0xFF2563EB); // Royal Blue
-const Color primaryColor700 = Color(0xFF1D4ED8); // Darker Blue
-const Color primaryColor50 = Color(0xFFEFF6FF); // Light Blue tint
-const Color secondaryColor = Color(0xFFFD5812);
-const Color errorColor = Color(0xFFFF4542);
-const Color successColor = Color(0xFF22C55E);
+/// Base color (Jadwalin Warm Mocha & Oat Milk Design System)
+const Color primaryColor = Color(0xFF5C4033); // Roasted Mocha Brown
+const Color primaryColor700 = Color(0xFF452F25); // Deep Dark Mocha
+const Color primaryColor50 = Color(0xFFF7F2ED); // Oat Milk Tint
+const Color secondaryColor = Color(0xFFC88A58); // Warm Caramel Accent
+const Color errorColor = Color(0xFFDC2626);
+const Color successColor = Color(0xFF16A34A);
+
+/// Warm Earth Tone Tints
+const Color oatMilkPill = Color(0xFFF5EBE1);
+const Color warmCanvasBg = Color(0xFFFAF8F5);
+const Color darkEspresso = Color(0xFF261C14);
+const Color mutedTaupe = Color(0xFF796B62);
+
+/// Session Colors (Cozy Aesthetic)
+const Color sessionPagiBg = Color(0xFFFFF6ED);
+const Color sessionPagiAccent = Color(0xFFD97706);
+const Color sessionSiangBg = Color(0xFFF0F7F6);
+const Color sessionSiangAccent = Color(0xFF0D9488);
+const Color sessionSoreBg = Color(0xFFF8F0F5);
+const Color sessionSoreAccent = Color(0xFF9D4EDD);
+const Color sessionMalamBg = Color(0xFFEEF0F8);
+const Color sessionMalamAccent = Color(0xFF4361EE);
 
 const Color shimmerColor = Color(0xFFB4B4B4);
 const Color shimmerHighlightColor = Color(0xFFFFFFFF);
@@ -113,13 +129,13 @@ const Color red800 = Color(0xFF972F1D);
 const Color red900 = Color(0xFF7D2D1F);
 
 // Text
-const Color textNeutralPrimary = Color(0xFF09090B);
-const Color textDarkPrimary = Color(0xFF1F1F1F);
-const Color textDarkSecondary = Color(0xFF757575);
+const Color textNeutralPrimary = Color(0xFF261C14); // Dark Espresso
+const Color textDarkPrimary = Color(0xFF261C14);
+const Color textDarkSecondary = Color(0xFF796B62);
 const Color textDarkTertiary = Color(0xFF9E9E9E);
 const Color textLightPrimary = Color(0xFFFFFFFF);
 const Color textLightSecondary = Color(0xFFE0E0E0);
-const Color textNeutralSecondary = Color(0xFF71717A);
+const Color textNeutralSecondary = Color(0xFF796B62); // Muted Taupe
 const Color textWhitePrimary = Color(0xFFFFFFFF);
 const Color textWhiteSecondary = Color(0xFFD4D4D8);
 const Color textDisabled = Color(0xFF9E9E9E);
@@ -177,8 +193,8 @@ const Color iconButtonDanger = Color(0xFFFFFFFF);
 const Color iconButtonSuccess = Color(0xFFFFFFFF);
 const Color iconButtonWarning = Color(0xFFFFFFFF);
 
-// Bg (PokéAtlas Design System)
-const Color bg = Color(0xFFF8FAFC); // Slate 50
+// Bg
+const Color bg = Color(0xFFFAF8F5); // Warm Canvas / Cream
 const Color bgLight = Color(0xFFFFFFFF);
 const Color bgDark = Color(0xFF0F172A); // Slate 900
 const Color bgSurfaceNeutralLight = Color(0xFFF5F5F5);
