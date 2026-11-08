@@ -35,17 +35,31 @@ Aturan Gaya Bahasa & Konten:
   ///
   /// [history] berisi pesan sebelumnya dengan format
   /// `{'role': 'user'|'assistant', 'content': '...'}`.
+  /// [userMemory] berisi fakta yang diingat tentang user dari sesi sebelumnya.
   Future<String> sendMessage({
     required String userMessage,
     List<Map<String, String>> history = const [],
+    List<String> userMemory = const [],
     String model = defaultModel,
   }) async {
     final url = Uri.parse('${Env.dattioBaseUrl}/chat/completions');
 
+    final dynamicSystemPrompt = StringBuffer(systemPrompt);
+    if (userMemory.isNotEmpty) {
+      dynamicSystemPrompt.writeln('\nMemori Tentang Pengguna (dari percakapan sebelumnya):');
+      for (final fact in userMemory) {
+        dynamicSystemPrompt.writeln('- $fact');
+      }
+      dynamicSystemPrompt.writeln(
+        'Gunakan memori di atas secara natural jika relevan '
+        '(misalnya sebut nama pengguna jika sudah diketahui). Jangan buat-buat data di luar memori ini.',
+      );
+    }
+
     final payload = {
       'model': model,
       'messages': [
-        {'role': 'system', 'content': systemPrompt},
+        {'role': 'system', 'content': dynamicSystemPrompt.toString()},
         ...history,
         {'role': 'user', 'content': userMessage},
       ],
@@ -101,6 +115,76 @@ Aturan Gaya Bahasa & Konten:
       default:
         return 'Maaf, terjadi kesalahan (kode $status). Coba lagi.';
     }
+  }
+
+  /// Ekstrak fakta profil user (nama, kampus, semester, kesukaan)
+  /// dari percakapan secara pasif di background.
+  ///
+  /// Mengembalikan list string fakta singkat, misalnya:
+  /// `["Nama pengguna Doni", "Mahasiswa semester 1 Teknik Informatika"]`.
+  /// Jika tidak ada fakta baru yang ditemukan, return list kosong.
+  Future<List<String>> extractUserFacts({
+    required String userText,
+    required String botReply,
+  }) async {
+    // Lewati jika pesan terlalu singkat untuk mengandung profil
+    if (userText.trim().split(' ').length < 2) return const [];
+
+    final url = Uri.parse('${Env.dattioBaseUrl}/chat/completions');
+
+    final prompt = '''
+Analisis percakapan berikut dan ekstrak fakta pribadi tentang pengguna HANYA jika pengguna secara eksplisit menyebutkan identitasnya (nama, panggilan, kampus, jurusan, semester, hobi/minat belajar, pekerjaan).
+
+Format output WAJIB JSON array murni berisi string, tanpa markdown, tanpa penjelasan:
+Contoh: ["Nama pengguna Doni", "Mahasiswa semester 1 di Telkom University"]
+Jika TIDAK ada fakta baru tentang identitas pengguna, balas HANYA: []
+
+User: $userText
+Asisten: $botReply
+''';
+
+    try {
+      final response = await _client
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ${Env.dattioApiKey}',
+            },
+            body: jsonEncode({
+              'model': defaultModel,
+              'messages': [
+                {'role': 'user', 'content': prompt},
+              ],
+              'temperature': 0.1,
+              'max_tokens': 120,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final choices = data['choices'] as List?;
+        final raw = ((choices?.first as Map?)?['message'] as Map?)?['content']
+                ?.toString()
+                .trim() ??
+            '';
+
+        // Bersihkan jika model membungkusnya dalam ```json ... ```
+        final clean = raw
+            .replaceAll(RegExp(r'^```(json)?', multiLine: true), '')
+            .replaceAll('```', '')
+            .trim();
+
+        final parsed = jsonDecode(clean);
+        if (parsed is List) {
+          return parsed.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+        }
+      }
+    } catch (_) {
+      // Background extraction gagal: tidak perlu ganggu flow utama
+    }
+    return const [];
   }
 
   void dispose() => _client.close();

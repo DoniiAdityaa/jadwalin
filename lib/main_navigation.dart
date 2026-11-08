@@ -68,6 +68,11 @@ class _MainNavigationState extends State<MainNavigation>
     await _loadSessions();
   }
 
+  Future<void> _renameSession(String sessionId, String newTitle) async {
+    await serviceLocator<ChatDao>().renameSession(sessionId, newTitle);
+    await _loadSessions();
+  }
+
   /// Progress buka-tutup sidebar: 0.0 = tertutup, 1.0 = terbuka penuh.
   double _sidebarProgress = 0.0;
 
@@ -166,6 +171,7 @@ class _MainNavigationState extends State<MainNavigation>
               onSessionTap: _openSession,
               onNewChat: _startNewChat,
               onSessionDelete: _deleteSession,
+              onSessionRename: _renameSession,
             ),
           ),
 

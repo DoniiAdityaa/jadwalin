@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/local/chat_dao.dart';
 import '../data/local/database_helper.dart';
 import '../data/local/schedule_dao.dart';
+import '../data/local/user_memory_dao.dart';
 import '../data/service/ai_chat_service.dart';
 import 'user_preference.dart';
 
@@ -28,6 +29,9 @@ Future<void> setUpLocator() async {
   );
   serviceLocator.registerLazySingleton<ChatDao>(
     () => ChatDao(dbHelper: serviceLocator<DatabaseHelper>()),
+  );
+  serviceLocator.registerLazySingleton<UserMemoryDao>(
+    () => UserMemoryDao(dbHelper: serviceLocator<DatabaseHelper>()),
   );
 
   // Seed contoh jadwal sekali di instalasi pertama.

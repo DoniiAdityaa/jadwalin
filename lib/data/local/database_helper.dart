@@ -14,7 +14,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._();
 
   static const String _dbName = 'jadwalin.db';
-  static const int _dbVersion = 1;
+  static const int _dbVersion = 2;
 
   Database? _db;
 
@@ -113,16 +113,34 @@ class DatabaseHelper {
 
     // Seed kategori default
     await _seedCategories(db);
+
+    // Memori lintas-sesi
+    await _createUserMemoryTable(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldV, int newV) async {
-    // Placeholder migrasi berikutnya.
-    //
-    // Contoh saat login + sync ditambahkan (versi 2):
+    // Migrasi v1 → v2: tabel memori lintas-sesi.
+    if (oldV < 2) {
+      await _createUserMemoryTable(db);
+    }
+
+    // Contoh saat login + sync ditambahkan (versi 3):
     //   ALTER TABLE schedules    ADD COLUMN remote_id TEXT;
     //   ALTER TABLE schedules    ADD COLUMN synced_at INTEGER;
     //   ALTER TABLE chat_sessions ADD COLUMN remote_id TEXT;
     //   ALTER TABLE chat_messages ADD COLUMN remote_id TEXT;
+    //   ALTER TABLE user_memory   ADD COLUMN remote_id TEXT;
+  }
+
+  /// Tabel fakta tentang user yang dipakai lintas sesi chat.
+  Future<void> _createUserMemoryTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE user_memory (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        fact        TEXT NOT NULL UNIQUE,
+        updated_at  INTEGER NOT NULL
+      )
+    ''');
   }
 
   Future<void> _seedCategories(Database db) async {

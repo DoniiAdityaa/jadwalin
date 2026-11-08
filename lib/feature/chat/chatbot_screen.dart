@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:jadwalin/config/service_locator.dart';
 import 'package:jadwalin/data/local/chat_dao.dart';
 import 'package:jadwalin/data/local/models.dart';
+import 'package:jadwalin/data/local/user_memory_dao.dart';
 import 'package:jadwalin/data/service/ai_chat_service.dart';
 import 'package:jadwalin/ui/color.dart';
 import 'package:jadwalin/ui/typography.dart';
@@ -43,6 +44,7 @@ class _ChatbotScreenState extends ChatbotScreenState {
   final ScrollController _scrollController = ScrollController();
   final AiChatService _aiService = serviceLocator<AiChatService>();
   final ChatDao _chatDao = serviceLocator<ChatDao>();
+  final UserMemoryDao _memoryDao = serviceLocator<UserMemoryDao>();
 
   bool _hasText = false;
   bool _isTyping = false;
@@ -174,10 +176,14 @@ class _ChatbotScreenState extends ChatbotScreenState {
       ),
     );
 
+    // Ambil memori lintas-sesi yang tersimpan di SQLite.
+    final memory = await _memoryDao.getAll();
+
     // Panggil AI real (Dattio / DeepSeek)
     final reply = await _aiService.sendMessage(
       userMessage: text,
       history: history,
+      userMemory: memory,
     );
 
     if (!mounted) return;
@@ -205,6 +211,20 @@ class _ChatbotScreenState extends ChatbotScreenState {
         createdAt: botTime,
       ),
     );
+
+    // Di background: cek apakah user menyebutkan fakta profil baru (nama, kampus, dsb).
+    _extractAndSaveMemory(text, reply);
+  }
+
+  /// Ekstraksi fakta profil secara non-blocking di background.
+  void _extractAndSaveMemory(String userText, String botReply) {
+    _aiService
+        .extractUserFacts(userText: userText, botReply: botReply)
+        .then((facts) {
+      if (facts.isNotEmpty) {
+        _memoryDao.saveFacts(facts);
+      }
+    }).catchError((_) {});
   }
 
   /// Buat sesi chat baru kalau belum ada. Judul = 40 karakter pesan pertama.

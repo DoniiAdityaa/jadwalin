@@ -57,6 +57,20 @@ class ChatDao {
     );
   }
 
+  /// Ganti nama sesi chat (rename dari sidebar).
+  Future<void> renameSession(String id, String newTitle) async {
+    final db = await _db;
+    await db.update(
+      'chat_sessions',
+      {
+        'title': newTitle,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   Future<void> deleteSession(String id) async {
     final db = await _db;
     // ON DELETE CASCADE pastikan semua pesan ikut terhapus

@@ -18,6 +18,7 @@ class AppSidebarContent extends StatelessWidget {
     this.onSessionTap,
     this.onNewChat,
     this.onSessionDelete,
+    this.onSessionRename,
   });
 
   final int currentIndex;
@@ -39,6 +40,9 @@ class AppSidebarContent extends StatelessWidget {
 
   /// Hapus sesi chat (dipanggil setelah user konfirmasi).
   final ValueChanged<String>? onSessionDelete;
+
+  /// Ganti nama sesi chat. Callback menerima (sessionId, judulBaru).
+  final void Function(String sessionId, String newTitle)? onSessionRename;
 
   @override
   Widget build(BuildContext context) {
@@ -202,6 +206,8 @@ class AppSidebarContent extends StatelessWidget {
                             isActive: s.id == activeSessionId,
                             onTap: () => onSessionTap?.call(s.id),
                             onDelete: () => onSessionDelete?.call(s.id),
+                            onRename: (newTitle) =>
+                                onSessionRename?.call(s.id, newTitle),
                           );
                         },
                       ),
@@ -421,6 +427,7 @@ class AppSidebarContent extends StatelessWidget {
     required bool isActive,
     required VoidCallback onTap,
     required VoidCallback onDelete,
+    required ValueChanged<String> onRename,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
@@ -566,6 +573,27 @@ class AppSidebarContent extends StatelessWidget {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 6),
+
+                  // Tombol rename kecil (pensil).
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _showRenameDialog(context, session, onRename),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: SvgPicture.asset(
+                        'assets/svg/ic_pencil.svg',
+                        width: 13,
+                        height: 13,
+                        colorFilter: ColorFilter.mode(
+                          isActive
+                              ? primaryColor.withValues(alpha: 0.7)
+                              : mutedTaupe.withValues(alpha: 0.6),
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -573,5 +601,120 @@ class AppSidebarContent extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Dialog untuk mengganti judul sesi chat.
+  Future<void> _showRenameDialog(
+    BuildContext context,
+    ChatSessionModel session,
+    ValueChanged<String> onRename,
+  ) async {
+    final controller = TextEditingController(text: session.title);
+    controller.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: controller.text.length,
+    );
+
+    final newTitle = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+        contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: oatMilkPill,
+                shape: BoxShape.circle,
+              ),
+              child: SvgPicture.asset(
+                'assets/svg/ic_pencil.svg',
+                width: 16,
+                height: 16,
+                colorFilter: const ColorFilter.mode(
+                  primaryColor,
+                  BlendMode.srcIn,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Ganti Nama',
+                style: mBold.copyWith(color: darkEspresso),
+              ),
+            ),
+          ],
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 60,
+          textInputAction: TextInputAction.done,
+          style: smRegular.copyWith(color: darkEspresso),
+          decoration: InputDecoration(
+            hintText: 'Judul percakapan',
+            hintStyle: smRegular.copyWith(color: mutedTaupe),
+            counterText: '',
+            filled: true,
+            fillColor: warmCanvasBg,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFEADBCE)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: primaryColor, width: 1.5),
+            ),
+          ),
+          onSubmitted: (value) =>
+              Navigator.pop(dialogContext, value.trim()),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              'Batal',
+              style: smSemiBold.copyWith(color: mutedTaupe),
+            ),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            style: TextButton.styleFrom(
+              backgroundColor: primaryColor,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              'Simpan',
+              style: smSemiBold.copyWith(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (newTitle != null && newTitle.isNotEmpty) {
+      onRename(newTitle);
+    }
   }
 }
