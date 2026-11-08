@@ -7,6 +7,7 @@ import 'package:jadwalin/data/local/user_memory_dao.dart';
 import 'package:jadwalin/data/service/ai_chat_service.dart';
 import 'package:jadwalin/ui/color.dart';
 import 'package:jadwalin/ui/typography.dart';
+import 'package:lottie/lottie.dart';
 
 /// State yang bisa dikendalikan dari luar (MainNavigation / Sidebar).
 abstract class ChatbotScreenState extends State<ChatbotScreen> {
@@ -15,18 +16,29 @@ abstract class ChatbotScreenState extends State<ChatbotScreen> {
 
   /// Mulai percakapan baru kosong (sesi baru dibuat saat pesan pertama).
   void startNewChat();
+
+  /// Kirim pesan atas nama user (dipakai bar bawah morphed di shell).
+  void sendMessage(String text);
+
+  /// Fokuskan field input (dipakai shell saat beralih ke mode chat).
+  void requestInputFocus();
 }
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({
     super.key,
     this.showBackButton = true,
+    this.showInputBar = true,
     this.onOpenSidebar,
     this.onSessionCreated,
   });
 
   /// Kalau dipakai sebagai tab di MainNavigation, back button disembunyikan.
   final bool showBackButton;
+
+  /// Kalau false, input bar internal disembunyikan (shell menyediakan
+  /// bar bawah morphed sebagai input).
+  final bool showInputBar;
 
   /// Callback buka sidebar drawer (dipakai saat jadi tab).
   final VoidCallback? onOpenSidebar;
@@ -112,6 +124,19 @@ class _ChatbotScreenState extends ChatbotScreenState {
       _lastAddedIndex = null;
       _isTyping = false;
     });
+  }
+
+  @override
+  void sendMessage(String text) {
+    final clean = text.trim();
+    if (clean.isEmpty) return;
+    _textController.text = clean;
+    _sendMessage();
+  }
+
+  @override
+  void requestInputFocus() {
+    _focusNode.requestFocus();
   }
 
   void _onTextChanged(String value) {
@@ -367,7 +392,12 @@ class _ChatbotScreenState extends ChatbotScreenState {
                   Positioned.fill(
                     child: ListView.builder(
                       controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        12,
+                        16,
+                        widget.showInputBar ? 100 : 88,
+                      ),
                       physics: const BouncingScrollPhysics(),
                       itemCount: _messages.length + (_isTyping ? 1 : 0),
                       itemBuilder: (context, index) {
@@ -375,123 +405,152 @@ class _ChatbotScreenState extends ChatbotScreenState {
                           return _typingBubble();
                         }
                         final msg = _messages[index];
-                        // Animasi fade + slide-up hanya untuk pesan terbaru
                         final isNewest = index == _lastAddedIndex;
+                        final isSingleGreeting =
+                            _messages.length == 1 && !msg['isFromUser'];
+
+                        Widget bubble = _chatBubble(
+                          text: msg['text'] as String,
+                          isUser: msg['isFromUser'] as bool,
+                          timestamp: msg['timestamp'] as DateTime,
+                        );
+
+                        // Saat chat kosong / baru mulai, beri orb mengambang di atas sapaan.
+                        if (isSingleGreeting) {
+                          bubble = Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(height: 18),
+                              SizedBox(
+                                width: 120,
+                                height: 120,
+                                child: Lottie.asset(
+                                  'assets/animation/ai_orb.json',
+                                  fit: BoxFit.contain,
+                                  repeat: true,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              bubble,
+                            ],
+                          );
+                        }
+
                         return _AnimatedMessageEntry(
                           key: ValueKey(index),
                           animate: isNewest,
-                          child: _chatBubble(
-                            text: msg['text'] as String,
-                            isUser: msg['isFromUser'] as bool,
-                            timestamp: msg['timestamp'] as DateTime,
-                          ),
+                          child: bubble,
                         );
                       },
                     ),
                   ),
 
-                  // Floating input bar (capsule rounded penuh)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                        child: Container(
-                          padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(28),
-                            border: Border.all(
-                              color: const Color(0xFFEADBCE),
-                              width: 1,
+                  // Floating input bar (capsule rounded penuh) — disembunyikan
+                  // jika shell menyediakan bar bawah morphed.
+                  if (widget.showInputBar)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(28),
+                              border: Border.all(
+                                color: const Color(0xFFEADBCE),
+                                width: 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: darkEspresso.withValues(alpha: 0.08),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: darkEspresso.withValues(alpha: 0.08),
-                                blurRadius: 18,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              // Tombol plus (kiri)
-                              _circleButton(
-                                icon: 'assets/svg/ic_plus.svg',
-                                filled: false,
-                                onTap: () {},
-                              ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                // Tombol plus (kiri)
+                                _circleButton(
+                                  icon: 'assets/svg/ic_plus.svg',
+                                  filled: false,
+                                  onTap: () {},
+                                ),
 
-                              const SizedBox(width: 10),
+                                const SizedBox(width: 10),
 
-                              // Text input
-                              Expanded(
-                                child: TextField(
-                                  controller: _textController,
-                                  focusNode: _focusNode,
-                                  style: smMedium.copyWith(color: darkEspresso),
-                                  maxLines: 4,
-                                  minLines: 1,
-                                  textAlignVertical: TextAlignVertical.center,
-                                  onChanged: _onTextChanged,
-                                  decoration: InputDecoration(
-                                    hintText: 'Tulis pesan...',
-                                    hintStyle:
-                                        smRegular.copyWith(color: mutedTaupe),
-                                    border: InputBorder.none,
-                                    enabledBorder: InputBorder.none,
-                                    focusedBorder: InputBorder.none,
-                                    disabledBorder: InputBorder.none,
-                                    errorBorder: InputBorder.none,
-                                    focusedErrorBorder: InputBorder.none,
-                                    filled: false,
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 2,
-                                      vertical: 10,
+                                // Text input
+                                Expanded(
+                                  child: TextField(
+                                    controller: _textController,
+                                    focusNode: _focusNode,
+                                    style:
+                                        smMedium.copyWith(color: darkEspresso),
+                                    maxLines: 4,
+                                    minLines: 1,
+                                    textAlignVertical: TextAlignVertical.center,
+                                    onChanged: _onTextChanged,
+                                    decoration: InputDecoration(
+                                      hintText: 'Tulis pesan...',
+                                      hintStyle:
+                                          smRegular.copyWith(color: mutedTaupe),
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      disabledBorder: InputBorder.none,
+                                      errorBorder: InputBorder.none,
+                                      focusedErrorBorder: InputBorder.none,
+                                      filled: false,
+                                      isDense: true,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                        horizontal: 2,
+                                        vertical: 10,
+                                      ),
+                                    ),
+                                    onSubmitted: (_) => _sendMessage(),
+                                  ),
+                                ),
+
+                                const SizedBox(width: 10),
+
+                                // Tombol kanan: mic (kosong) / send (ada teks)
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 180),
+                                  transitionBuilder: (child, animation) =>
+                                      ScaleTransition(
+                                    scale: animation,
+                                    child: FadeTransition(
+                                      opacity: animation,
+                                      child: child,
                                     ),
                                   ),
-                                  onSubmitted: (_) => _sendMessage(),
+                                  child: _hasText
+                                      ? _circleButton(
+                                          key: const ValueKey('send'),
+                                          icon: 'assets/svg/ic_send.svg',
+                                          filled: true,
+                                          onTap: _sendMessage,
+                                        )
+                                      : _circleButton(
+                                          key: const ValueKey('mic'),
+                                          icon: 'assets/svg/ic_mic.svg',
+                                          filled: true,
+                                          onTap: () {},
+                                        ),
                                 ),
-                              ),
-
-                              const SizedBox(width: 10),
-
-                              // Tombol kanan: mic (kosong) / send (ada teks)
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 180),
-                                transitionBuilder: (child, animation) =>
-                                    ScaleTransition(
-                                  scale: animation,
-                                  child: FadeTransition(
-                                    opacity: animation,
-                                    child: child,
-                                  ),
-                                ),
-                                child: _hasText
-                                    ? _circleButton(
-                                        key: const ValueKey('send'),
-                                        icon: 'assets/svg/ic_send.svg',
-                                        filled: true,
-                                        onTap: _sendMessage,
-                                      )
-                                    : _circleButton(
-                                        key: const ValueKey('mic'),
-                                        icon: 'assets/svg/ic_mic.svg',
-                                        filled: true,
-                                        onTap: () {},
-                                      ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -581,7 +640,22 @@ class _ChatbotScreenState extends ChatbotScreenState {
               ),
               border: Border.all(color: const Color(0xFFEADBCE), width: 1),
             ),
-            child: _TypingDots(),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: Lottie.asset(
+                    'assets/animation/ai_thinking.json',
+                    fit: BoxFit.contain,
+                    repeat: true,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _TypingDots(),
+              ],
+            ),
           ),
         ],
       ),
@@ -805,7 +879,8 @@ class _FormattedMessageText extends StatelessWidget {
   final bool isUser;
 
   static final RegExp _boldPattern = RegExp(r'\*\*(.+?)\*\*');
-  static final RegExp _italicPattern = RegExp(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)');
+  static final RegExp _italicPattern =
+      RegExp(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)');
 
   @override
   Widget build(BuildContext context) {
@@ -826,12 +901,10 @@ class _FormattedMessageText extends StatelessWidget {
         children.add(const SizedBox(height: 6));
         continue;
       }
-      final isBullet = line.trimLeft().startsWith('- ') ||
-          line.trimLeft().startsWith('• ');
+      final isBullet =
+          line.trimLeft().startsWith('- ') || line.trimLeft().startsWith('• ');
 
-      final content = isBullet
-          ? line.trimLeft().substring(2)
-          : line;
+      final content = isBullet ? line.trimLeft().substring(2) : line;
 
       final spans = _buildSpans(content, base);
 
@@ -842,9 +915,8 @@ class _FormattedMessageText extends StatelessWidget {
             text: '• ',
             style: TextStyle(
               fontWeight: FontWeight.w700,
-              color: isUser
-                  ? Colors.white.withValues(alpha: 0.8)
-                  : primaryColor,
+              color:
+                  isUser ? Colors.white.withValues(alpha: 0.8) : primaryColor,
             ),
           ),
         );

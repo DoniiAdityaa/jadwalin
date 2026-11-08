@@ -5,6 +5,7 @@ import 'package:jadwalin/ui/shared_widget/interactive_timeline.dart';
 import 'package:jadwalin/ui/shared_widget/mini_calendar.dart';
 import 'package:jadwalin/ui/shared_widget/schedule_bottom_sheets.dart';
 import 'package:jadwalin/ui/typography.dart';
+import 'package:lottie/lottie.dart';
 
 class CalendarDetailScreen extends StatefulWidget {
   const CalendarDetailScreen({
@@ -29,12 +30,28 @@ class CalendarDetailScreen extends StatefulWidget {
 
 class _CalendarDetailScreenState extends State<CalendarDetailScreen> {
   static const List<String> _monthNames = [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
   ];
 
   static const List<String> _weekdayShort = [
-    'Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab',
+    'Min',
+    'Sen',
+    'Sel',
+    'Rab',
+    'Kam',
+    'Jum',
+    'Sab',
   ];
 
   late DateTime _selectedDate;
@@ -74,9 +91,8 @@ class _CalendarDetailScreenState extends State<CalendarDetailScreen> {
 
     // Tinggi tiap jam di timeline = 68.0 (lihat InteractiveTimeline).
     const double hourHeight = 68.0;
-    final target = (hour * hourHeight) +
-        (widget.focusMinute / 60.0 * hourHeight) -
-        80.0;
+    final target =
+        (hour * hourHeight) + (widget.focusMinute / 60.0 * hourHeight) - 80.0;
 
     _timelineScrollController.animateTo(
       target.clamp(
@@ -169,7 +185,8 @@ class _CalendarDetailScreenState extends State<CalendarDetailScreen> {
 
   void _onMonthTapped(int monthIndex) {
     setState(() {
-      final daysInTargetMonth = DateTime(_selectedDate.year, monthIndex + 2, 0).day;
+      final daysInTargetMonth =
+          DateTime(_selectedDate.year, monthIndex + 2, 0).day;
       final targetDay = _selectedDate.day.clamp(1, daysInTargetMonth);
       _selectedDate = DateTime(_selectedDate.year, monthIndex + 1, targetDay);
     });
@@ -239,58 +256,126 @@ class _CalendarDetailScreenState extends State<CalendarDetailScreen> {
 
                     // 3. Timeline (scroll driving the collapse)
                     Expanded(
-                      child: InteractiveTimeline(
-                        items: _schedules,
-                        selectedDate: _selectedDate,
-                        scrollController: _timelineScrollController,
-                        onItemTapped: (item) {
-                          // Tap -> Buka Detail Read-Only
-                          ScheduleBottomSheets.showDetail(
-                            context: context,
-                            item: item,
-                            onEdit: () {
-                              // Dari detail klik Edit -> buka form edit
-                              ScheduleBottomSheets.showAddOrEdit(
-                                context: context,
-                                initialItem: item,
-                                onSave: (updated) {
-                                  setState(() {
-                                    final idx = _schedules.indexWhere(
-                                      (s) => s.id == updated.id,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: InteractiveTimeline(
+                              items: _schedules,
+                              selectedDate: _selectedDate,
+                              scrollController: _timelineScrollController,
+                              onItemTapped: (item) {
+                                // Tap -> Buka Detail Read-Only
+                                ScheduleBottomSheets.showDetail(
+                                  context: context,
+                                  item: item,
+                                  onEdit: () {
+                                    // Dari detail klik Edit -> buka form edit
+                                    ScheduleBottomSheets.showAddOrEdit(
+                                      context: context,
+                                      initialItem: item,
+                                      onSave: (updated) {
+                                        setState(() {
+                                          final idx = _schedules.indexWhere(
+                                            (s) => s.id == updated.id,
+                                          );
+                                          if (idx != -1) {
+                                            _schedules[idx] = updated;
+                                          }
+                                        });
+                                      },
                                     );
-                                    if (idx != -1) _schedules[idx] = updated;
-                                  });
-                                },
-                              );
-                            },
-                            onDelete: () {
-                              setState(() {
-                                _schedules.removeWhere((s) => s.id == item.id);
-                              });
-                            },
-                          );
-                        },
-                        onEmptySlotLongPressed: (hour, minute) {
-                          // Long press slot kosong -> Tambah Jadwal, jam pre-fill
-                          ScheduleBottomSheets.showAddOrEdit(
-                            context: context,
-                            defaultStartHour: hour,
-                            defaultStartMinute: minute,
-                            onSave: (newItem) {
-                              setState(() {
-                                _schedules.add(newItem);
-                              });
-                            },
-                          );
-                        },
-                        onItemUpdated: (updated) {
-                          // Drag atau resize selesai -> update data
-                          setState(() {
-                            final idx =
-                                _schedules.indexWhere((s) => s.id == updated.id);
-                            if (idx != -1) _schedules[idx] = updated;
-                          });
-                        },
+                                  },
+                                  onDelete: () {
+                                    setState(() {
+                                      _schedules
+                                          .removeWhere((s) => s.id == item.id);
+                                    });
+                                  },
+                                );
+                              },
+                              onEmptySlotLongPressed: (hour, minute) {
+                                // Long press slot kosong -> Tambah Jadwal, jam pre-fill
+                                ScheduleBottomSheets.showAddOrEdit(
+                                  context: context,
+                                  defaultStartHour: hour,
+                                  defaultStartMinute: minute,
+                                  onSave: (newItem) {
+                                    setState(() {
+                                      _schedules.add(newItem);
+                                    });
+                                  },
+                                );
+                              },
+                              onItemUpdated: (updated) {
+                                // Drag atau resize selesai -> update data
+                                setState(() {
+                                  final idx = _schedules
+                                      .indexWhere((s) => s.id == updated.id);
+                                  if (idx != -1) _schedules[idx] = updated;
+                                });
+                              },
+                            ),
+                          ),
+
+                          // Empty state floating saat hari ini tidak punya jadwal
+                          if (_schedules.isEmpty)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                ignoring: false,
+                                child: Center(
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(
+                                        horizontal: 32),
+                                    padding: const EdgeInsets.all(20),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(22),
+                                      border: Border.all(
+                                        color: const Color(0xFFEADBCE),
+                                        width: 1,
+                                      ),
+                                      boxShadow: const [
+                                        BoxShadow(
+                                          color: Color(0x0E000000),
+                                          blurRadius: 18,
+                                          offset: Offset(0, 6),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SizedBox(
+                                          width: 130,
+                                          height: 130,
+                                          child: Lottie.asset(
+                                            'assets/animation/empty_calendar.json',
+                                            fit: BoxFit.contain,
+                                            repeat: true,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        Text(
+                                          'Hari ini masih kosong',
+                                          style: mBold.copyWith(
+                                              color: darkEspresso),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Tekan lama di slot jam mana saja untuk menambahkan agenda baru.',
+                                          style: xsRegular.copyWith(
+                                            color: mutedTaupe,
+                                            height: 1.35,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ],
@@ -331,7 +416,8 @@ class _CalendarDetailScreenState extends State<CalendarDetailScreen> {
               'assets/svg/ic_arrow_left.svg',
               width: 22,
               height: 22,
-              colorFilter: const ColorFilter.mode(darkEspresso, BlendMode.srcIn),
+              colorFilter:
+                  const ColorFilter.mode(darkEspresso, BlendMode.srcIn),
             ),
           ),
           const Spacer(),
@@ -393,8 +479,11 @@ class _CalendarDetailScreenState extends State<CalendarDetailScreen> {
                     style: TextStyle(
                       fontFamily: 'Plus Jakarta Sans',
                       fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                      color: isSelected ? darkEspresso : mutedTaupe.withValues(alpha: 0.5),
+                      fontWeight:
+                          isSelected ? FontWeight.w800 : FontWeight.w500,
+                      color: isSelected
+                          ? darkEspresso
+                          : mutedTaupe.withValues(alpha: 0.5),
                     ),
                   ),
                 ),
@@ -461,13 +550,15 @@ class _CalendarDetailScreenState extends State<CalendarDetailScreen> {
             itemCount: totalDays,
             itemBuilder: (context, index) {
               final day = index + 1;
-              final date = DateTime(_selectedDate.year, _selectedDate.month, day);
+              final date =
+                  DateTime(_selectedDate.year, _selectedDate.month, day);
               final isSelected = _selectedDate.day == day;
               final dayName = _weekdayShort[date.weekday % 7];
 
               // Dot agenda: dummy set + jadwal yang ada di tanggal ini
-              final hasEvent = CalendarEventDummy.eventDayNumbers.contains(day) ||
-                  (isSelected && _schedules.isNotEmpty);
+              final hasEvent =
+                  CalendarEventDummy.eventDayNumbers.contains(day) ||
+                      (isSelected && _schedules.isNotEmpty);
 
               // Penanda hari ini
               final now = DateTime.now();
@@ -521,8 +612,10 @@ class _CalendarDetailScreenState extends State<CalendarDetailScreen> {
                               alignment: const Alignment(0, -0.15),
                               child: Text(
                                 '$day',
-                                style: (isSelected ? xsBold : xsMedium).copyWith(
-                                  color: isSelected ? Colors.white : darkEspresso,
+                                style:
+                                    (isSelected ? xsBold : xsMedium).copyWith(
+                                  color:
+                                      isSelected ? Colors.white : darkEspresso,
                                 ),
                               ),
                             ),
@@ -556,7 +649,9 @@ class _CalendarDetailScreenState extends State<CalendarDetailScreen> {
                                   width: 4,
                                   height: 4,
                                   decoration: BoxDecoration(
-                                    color: isSelected ? Colors.white : primaryColor,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : primaryColor,
                                     shape: BoxShape.circle,
                                   ),
                                 ),

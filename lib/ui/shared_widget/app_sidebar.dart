@@ -126,28 +126,11 @@ class AppSidebarContent extends StatelessWidget {
               ),
               const SizedBox(height: 24),
 
-              // Navigasi Utama
-              _sectionLabel('Navigasi'),
-              const SizedBox(height: 10),
-              _navRow(
-                icon: 'assets/svg/ic_calendar.svg',
-                label: 'Kalender & Jadwal',
-                isActive: currentIndex == 0,
-                onTap: () {
-                  onNavigate(0);
-                  onClose();
-                },
-              ),
-              const SizedBox(height: 6),
-              _navRow(
-                icon: 'assets/svg/ic_message_dots.svg',
-                label: 'Chatbot AI',
-                isActive: currentIndex == 1,
-                onTap: () {
-                  onNavigate(1);
-                  onClose();
-                },
-              ),
+              // Navigasi utama berupa segmented toggle ringkas.
+              // Bottom bar adalah sumber navigasi tunggal; toggle ini
+              // cermin cepat agar sidebar tetap fungsional tanpa menduplikasi
+              // daftar menu.
+              _modeToggle(currentIndex, onNavigate, onClose),
 
               const SizedBox(height: 22),
               _sectionLabel('Tambah Jadwal Otomatis'),
@@ -276,7 +259,53 @@ class AppSidebarContent extends StatelessWidget {
     );
   }
 
-  Widget _navRow({
+  /// Segmented toggle ringkas: Home / Chatbot.
+  ///
+  /// Berfungsi sebagai cermin cepat dari bottom bar tanpa menduplikasi
+  /// daftar menu penuh. Tap berpindah mode sekaligus menutup sidebar.
+  Widget _modeToggle(
+    int currentIndex,
+    ValueChanged<int> onNavigate,
+    VoidCallback onClose,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: warmCanvasBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFEADBCE), width: 1),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _modeSegment(
+              icon: 'assets/svg/ic_calendar.svg',
+              label: 'Jadwal',
+              isActive: currentIndex == 0,
+              onTap: () {
+                onNavigate(0);
+                onClose();
+              },
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _modeSegment(
+              icon: 'assets/svg/ic_message_dots.svg',
+              label: 'Chatbot',
+              isActive: currentIndex == 1,
+              onTap: () {
+                onNavigate(1);
+                onClose();
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _modeSegment({
     required String icon,
     required String label,
     required bool isActive,
@@ -286,42 +315,41 @@ class AppSidebarContent extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(vertical: 9),
         decoration: BoxDecoration(
-          color: isActive ? oatMilkPill : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          color: isActive ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: isActive
+              ? const [
+                  BoxShadow(
+                    color: Color(0x0F000000),
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             SvgPicture.asset(
               icon,
-              width: 20,
-              height: 20,
+              width: 16,
+              height: 16,
               colorFilter: ColorFilter.mode(
                 isActive ? primaryColor : mutedTaupe,
                 BlendMode.srcIn,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 7),
             Text(
               label,
-              style: sMedium.copyWith(
+              style: xsSemiBold.copyWith(
                 color: isActive ? darkEspresso : mutedTaupe,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
-            if (isActive) ...[
-              const Spacer(),
-              Container(
-                width: 6,
-                height: 6,
-                decoration: const BoxDecoration(
-                  color: primaryColor,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -676,8 +704,7 @@ class AppSidebarContent extends StatelessWidget {
               borderSide: const BorderSide(color: primaryColor, width: 1.5),
             ),
           ),
-          onSubmitted: (value) =>
-              Navigator.pop(dialogContext, value.trim()),
+          onSubmitted: (value) => Navigator.pop(dialogContext, value.trim()),
         ),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [

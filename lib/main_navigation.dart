@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:jadwalin/config/service_locator.dart';
 import 'package:jadwalin/data/local/chat_dao.dart';
@@ -7,6 +8,9 @@ import 'package:jadwalin/feature/chat/chatbot_screen.dart';
 import 'package:jadwalin/feature/home/home_screen.dart';
 import 'package:jadwalin/ui/color.dart';
 import 'package:jadwalin/ui/shared_widget/app_sidebar.dart';
+import 'package:jadwalin/ui/shared_widget/app_snackbar.dart';
+import 'package:jadwalin/ui/shared_widget/bouncing_tap.dart';
+import 'package:jadwalin/ui/shared_widget/dattio_ai_studio_sheet.dart';
 import 'package:jadwalin/ui/typography.dart';
 
 class MainNavigation extends StatefulWidget {
@@ -23,7 +27,13 @@ class _MainNavigationState extends State<MainNavigation>
   int _currentIndex = 0;
 
   /// Controller untuk memanggil openSession / startNewChat di chatbot.
-  final GlobalKey<ChatbotScreenState> _chatKey = GlobalKey<ChatbotScreenState>();
+  final GlobalKey<ChatbotScreenState> _chatKey =
+      GlobalKey<ChatbotScreenState>();
+
+  /// Text controller untuk input chat morphed di bottom bar.
+  final TextEditingController _chatInputController = TextEditingController();
+  final FocusNode _chatInputFocusNode = FocusNode();
+  bool _hasChatText = false;
 
   /// Riwayat chat dari SQLite (sidebar).
   List<ChatSessionModel> _sessions = const [];
@@ -41,6 +51,173 @@ class _MainNavigationState extends State<MainNavigation>
     final sessions = await serviceLocator<ChatDao>().getSessions(limit: 30);
     if (!mounted) return;
     setState(() => _sessions = sessions);
+  }
+
+  @override
+  void dispose() {
+    _chatInputController.dispose();
+    _chatInputFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _onChatInputChanged(String value) {
+    final has = value.trim().isNotEmpty;
+    if (has != _hasChatText) {
+      setState(() => _hasChatText = has);
+    }
+  }
+
+  void _sendFromBottomBar() {
+    final text = _chatInputController.text.trim();
+    if (text.isEmpty) return;
+    _chatKey.currentState?.sendMessage(text);
+    _chatInputController.clear();
+    setState(() => _hasChatText = false);
+  }
+
+  /// Bottom sheet pilih sumber lampiran: Gambar / PDF.
+  void _showAttachmentSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(22, 14, 22, 30),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEADBCE),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Lampirkan ke Asisten Jadwal',
+                style: mBold.copyWith(color: darkEspresso),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Pilih sumber untuk diekstrak jadi jadwal',
+                style: xsRegular.copyWith(color: mutedTaupe),
+              ),
+              const SizedBox(height: 18),
+              _attachOption(
+                icon: 'assets/svg/ic_image.svg',
+                iconBg: const Color(0xFFFFF3E8),
+                iconColor: secondaryColor,
+                title: 'Gambar / Screenshot',
+                subtitle: 'Poster, foto papan tulis, atau tangkapan layar',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _handleAttachment('image');
+                },
+              ),
+              const SizedBox(height: 10),
+              _attachOption(
+                icon: 'assets/svg/ic_file_text.svg',
+                iconBg: oatMilkPill,
+                iconColor: primaryColor,
+                title: 'Dokumen PDF',
+                subtitle: 'KRS, jadwal kuliah, atau surat undangan',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _handleAttachment('pdf');
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Baris opsi lampiran di dalam bottom sheet.
+  Widget _attachOption({
+    required String icon,
+    required Color iconBg,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFEADBCE), width: 1),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: iconBg,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              alignment: Alignment.center,
+              child: SvgPicture.asset(
+                icon,
+                width: 21,
+                height: 21,
+                colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: sSemiBold.copyWith(color: darkEspresso)),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: xsRegular.copyWith(color: mutedTaupe),
+                  ),
+                ],
+              ),
+            ),
+            SvgPicture.asset(
+              'assets/svg/ic_chevron_right.svg',
+              width: 16,
+              height: 16,
+              colorFilter: const ColorFilter.mode(mutedTaupe, BlendMode.srcIn),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Placeholder handling lampiran. Belum ada parser — beri umpan balik
+  /// sementara ke user lewat snackbar global sampai integrasi picker siap.
+  void _handleAttachment(String type) {
+    final label = type == 'pdf' ? 'Dokumen PDF' : 'Gambar';
+    AppSnackBar.info(
+      context,
+      message: '$label dipilih',
+      subtitle: 'Fitur ekstraksi segera hadir',
+    );
+  }
+
+  /// Voice note belum diimplementasi — beri umpan balik sementara.
+  void _onVoiceNoteTapped() {
+    AppSnackBar.comingSoon(context, featureName: 'Voice note');
   }
 
   void _openSession(String sessionId) {
@@ -84,11 +261,45 @@ class _MainNavigationState extends State<MainNavigation>
   bool get _isChatMode => _currentIndex == 1;
 
   void _onTabTapped(int index) {
-    if (_currentIndex == index) return;
-    setState(() => _currentIndex = index);
+    if (_currentIndex == index) {
+      // Tap tab yang sama saat sidebar terbuka -> tutup sidebar.
+      if (_sidebarProgress > 0) _closeSidebar();
+      return;
+    }
+    setState(() {
+      _currentIndex = index;
+      // Sidebar hanya relevan di mode Chatbot. Pindah ke Jadwal menutupnya
+      // agar tidak ada drawer menggantung di layar jadwal.
+      if (index != 1) _sidebarProgress = 0.0;
+    });
   }
 
-  void _openSidebar() => setState(() => _sidebarProgress = 1.0);
+  /// Tap tombol tengah: langsung buka Dattio AI Studio.
+  void _onAiButtonTapped() {
+    HapticFeedback.lightImpact();
+    _showDattioPromptSheet();
+  }
+
+  /// Bottom sheet "Dattio AI Studio" dengan animasi masuk yang halus.
+  void _showDattioPromptSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: false,
+      backgroundColor: Colors.transparent,
+      barrierColor: const Color(0xFF261C14).withValues(alpha: 0.42),
+      builder: (sheetContext) => DattioAiStudioSheet(
+        onPickSource: (type) {
+          Navigator.pop(sheetContext);
+          _handleAiImport(type);
+        },
+        onManualText: () {
+          Navigator.pop(sheetContext);
+          setState(() => _currentIndex = 1);
+        },
+      ),
+    );
+  }
 
   void _closeSidebar() => setState(() => _sidebarProgress = 0.0);
 
@@ -98,6 +309,8 @@ class _MainNavigationState extends State<MainNavigation>
 
   /// Gesture drag mulai: geser sidebar sesuai posisi jari.
   void _onHorizontalDragUpdate(DragUpdateDetails details, double width) {
+    // Drawer swipe hanya aktif di mode Chatbot.
+    if (!_isChatMode) return;
     setState(() {
       _isDragging = true;
       _sidebarProgress =
@@ -107,6 +320,10 @@ class _MainNavigationState extends State<MainNavigation>
 
   /// Drag selesai: snap ke buka/tutup berdasarkan progress.
   void _onHorizontalDragEnd(DragEndDetails details) {
+    if (!_isChatMode) {
+      if (_isDragging) setState(() => _isDragging = false);
+      return;
+    }
     final velocity = details.primaryVelocity ?? 0;
     setState(() {
       _isDragging = false;
@@ -131,13 +348,16 @@ class _MainNavigationState extends State<MainNavigation>
 
   void _handleAiImport(String type) {
     _closeSidebar();
+    // Pindah ke mode Chatbot dulu supaya laporan AI muncul di sana.
     Future.delayed(const Duration(milliseconds: 340), () {
       if (!mounted) return;
+      setState(() => _currentIndex = 1);
       _showAiInputBottomSheet();
     });
   }
 
   void _onHorizontalDragStart(DragStartDetails details) {
+    if (!_isChatMode) return;
     setState(() => _isDragging = true);
   }
 
@@ -216,6 +436,7 @@ class _MainNavigationState extends State<MainNavigation>
                           ChatbotScreen(
                             key: _chatKey,
                             showBackButton: false,
+                            showInputBar: false,
                             onOpenSidebar: _toggleSidebar,
                             onSessionCreated: _loadSessions,
                           ),
@@ -251,101 +472,260 @@ class _MainNavigationState extends State<MainNavigation>
           ),
         ],
       ),
-      bottomNavigationBar: _isChatMode
-          ? null
-          : AnimatedSlide(
-              duration: _isDragging
-                  ? Duration.zero
-                  : const Duration(milliseconds: 260),
-              curve: Curves.easeOutCubic,
-              offset: Offset(_sidebarProgress * 0.55, _sidebarProgress * 1.4),
-              child: AnimatedOpacity(
-                duration: _isDragging
-                    ? Duration.zero
-                    : const Duration(milliseconds: 260),
-                opacity: 1 - _sidebarProgress,
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 44,
-                      vertical: 14,
-                    ),
-                    child: Container(
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(36),
-                        boxShadow: [
-                          BoxShadow(
-                            color: primaryColor.withValues(alpha: 0.08),
-                            blurRadius: 24,
-                            offset: const Offset(0, 8),
-                          ),
-                          BoxShadow(
-                            color: secondaryColor.withValues(alpha: 0.04),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+      bottomNavigationBar: AnimatedSlide(
+        duration:
+            _isDragging ? Duration.zero : const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        offset: Offset(_sidebarProgress * 0.55, _sidebarProgress * 1.4),
+        child: AnimatedOpacity(
+          duration:
+              _isDragging ? Duration.zero : const Duration(milliseconds: 260),
+          opacity: 1 - _sidebarProgress,
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: AnimatedPadding(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.symmetric(
+                  horizontal: _isChatMode ? 16 : 44,
+                  vertical: _isChatMode ? 10 : 14,
+                ),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  height: _isChatMode ? 58 : 72,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(_isChatMode ? 29 : 36),
+                    border: _isChatMode
+                        ? Border.all(color: const Color(0xFFEADBCE), width: 1)
+                        : null,
+                    boxShadow: [
+                      BoxShadow(
+                        color: _isChatMode
+                            ? darkEspresso.withValues(alpha: 0.08)
+                            : primaryColor.withValues(alpha: 0.08),
+                        blurRadius: _isChatMode ? 18 : 24,
+                        offset: Offset(0, _isChatMode ? 4 : 8),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          // Tab 0: Rundown Harian
-                          _navItem(
-                            svgAsset: 'assets/svg/ic_calendar.svg',
-                            isSelected: _currentIndex == 0,
-                            onTap: () => _onTabTapped(0),
-                          ),
-
-                          // Center Action: Buka Sidebar
-                          GestureDetector(
-                            onTap: _openSidebar,
-                            child: Container(
-                              width: 52,
-                              height: 52,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [primaryColor, secondaryColor],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(22),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: primaryColor.withValues(alpha: 0.35),
-                                    blurRadius: 16,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                ],
-                              ),
-                              child: Center(
-                                child: SvgPicture.asset(
-                                  'assets/svg/ic_sparkles.svg',
-                                  width: 24,
-                                  height: 24,
-                                  colorFilter: const ColorFilter.mode(
-                                    Colors.white,
-                                    BlendMode.srcIn,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // Tab 1: AI Chat Asisten
-                          _navItem(
-                            svgAsset: 'assets/svg/ic_message_dots.svg',
-                            isSelected: _currentIndex == 1,
-                            onTap: () => _onTabTapped(1),
-                          ),
-                        ],
-                      ),
-                    ),
+                      if (!_isChatMode)
+                        BoxShadow(
+                          color: secondaryColor.withValues(alpha: 0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                    ],
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      );
+                    },
+                    child:
+                        _isChatMode ? _buildChatInputBar() : _buildMainNavBar(),
                   ),
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Isi bottom bar saat mode normal (Jadwal): 3 item navigasi.
+  Widget _buildMainNavBar() {
+    return Row(
+      key: const ValueKey('nav_bar'),
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        // Tab 0: Rundown Harian
+        _navItem(
+          svgAsset: 'assets/svg/ic_calendar.svg',
+          isSelected: _currentIndex == 0,
+          onTap: () => _onTabTapped(0),
+        ),
+
+        // Center Action: Animasi Sparkle Burst -> Tanya Dattio
+        BouncingTap(
+          scaleDown: 0.93,
+          child: GestureDetector(
+            onTap: _onAiButtonTapped,
+            child: Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [primaryColor, secondaryColor],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withValues(alpha: 0.35),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: SvgPicture.asset(
+                  'assets/svg/ic_sparkles.svg',
+                  width: 24,
+                  height: 24,
+                  colorFilter: const ColorFilter.mode(
+                    Colors.white,
+                    BlendMode.srcIn,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        // Tab 1: AI Chat Asisten
+        _navItem(
+          svgAsset: 'assets/svg/ic_message_dots.svg',
+          isSelected: _currentIndex == 1,
+          onTap: () => _onTabTapped(1),
+        ),
+      ],
+    );
+  }
+
+  /// Isi bottom bar saat morphed ke mode Chatbot: input bar lengkap.
+  Widget _buildChatInputBar() {
+    return Padding(
+      key: const ValueKey('chat_input'),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Tombol plus: pilih sumber lampiran (Gambar / PDF)
+          BouncingTap(
+            scaleDown: 0.9,
+            child: InkWell(
+              onTap: _showAttachmentSheet,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: const BoxDecoration(
+                  color: oatMilkPill,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: SvgPicture.asset(
+                  'assets/svg/ic_plus.svg',
+                  width: 18,
+                  height: 18,
+                  colorFilter: const ColorFilter.mode(
+                    primaryColor,
+                    BlendMode.srcIn,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          // Text Field "Tulis pesan..."
+          Expanded(
+            child: TextField(
+              controller: _chatInputController,
+              focusNode: _chatInputFocusNode,
+              style: smMedium.copyWith(color: darkEspresso),
+              maxLines: 1,
+              textAlignVertical: TextAlignVertical.center,
+              onChanged: _onChatInputChanged,
+              onSubmitted: (_) => _sendFromBottomBar(),
+              decoration: InputDecoration(
+                hintText: 'Tulis pesan...',
+                hintStyle: smRegular.copyWith(color: mutedTaupe),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 10,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          // Tombol aksi: Buka Sidebar Drawer AI / Kirim Pesan
+          BouncingTap(
+            scaleDown: 0.9,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              transitionBuilder: (child, animation) => ScaleTransition(
+                scale: animation,
+                child: FadeTransition(opacity: animation, child: child),
+              ),
+              child: _hasChatText
+                  ? InkWell(
+                      key: const ValueKey('send_btn'),
+                      onTap: _sendFromBottomBar,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: const BoxDecoration(
+                          color: primaryColor,
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: SvgPicture.asset(
+                          'assets/svg/ic_send.svg',
+                          width: 18,
+                          height: 18,
+                          colorFilter: const ColorFilter.mode(
+                            Colors.white,
+                            BlendMode.srcIn,
+                          ),
+                        ),
+                      ),
+                    )
+                  : InkWell(
+                      key: const ValueKey('mic_btn'),
+                      onTap: _onVoiceNoteTapped,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: const BoxDecoration(
+                          color: oatMilkPill,
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: SvgPicture.asset(
+                          'assets/svg/ic_mic.svg',
+                          width: 18,
+                          height: 18,
+                          colorFilter: const ColorFilter.mode(
+                            primaryColor,
+                            BlendMode.srcIn,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -354,25 +734,34 @@ class _MainNavigationState extends State<MainNavigation>
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: 46,
-        height: 46,
-        decoration: BoxDecoration(
-          color: isSelected ? oatMilkPill : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Center(
-          child: SvgPicture.asset(
-            svgAsset,
-            width: 22,
-            height: 22,
-            colorFilter: ColorFilter.mode(
-              isSelected ? primaryColor : mutedTaupe,
-              BlendMode.srcIn,
+    return BouncingTap(
+      scaleDown: 0.9,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: isSelected ? oatMilkPill : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Center(
+            child: AnimatedScale(
+              scale: isSelected ? 1.12 : 1.0,
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutBack,
+              child: SvgPicture.asset(
+                svgAsset,
+                width: 22,
+                height: 22,
+                colorFilter: ColorFilter.mode(
+                  isSelected ? primaryColor : mutedTaupe,
+                  BlendMode.srcIn,
+                ),
+              ),
             ),
           ),
         ),

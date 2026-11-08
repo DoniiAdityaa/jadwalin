@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:jadwalin/ui/color.dart';
 import 'package:jadwalin/ui/typography.dart';
+import 'package:lottie/lottie.dart';
 
 /// Kartu rangkuman sukses yang tampil saat seluruh agenda hari ini sudah lewat.
 ///
@@ -42,26 +43,17 @@ class AllDoneCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Ikon centang hijau emerald lembut
-          Container(
-            width: 44,
-            height: 44,
-            decoration: const BoxDecoration(
-              color: Color(0xFFECFDF5),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: SvgPicture.asset(
-              'assets/svg/ic_check_circle.svg',
-              width: 22,
-              height: 22,
-              colorFilter: const ColorFilter.mode(
-                Color(0xFF059669),
-                BlendMode.srcIn,
-              ),
+          // Animasi centang sukses + konfeti memancar
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: Lottie.asset(
+              'assets/animation/done_burst.json',
+              fit: BoxFit.contain,
+              repeat: false,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
 
           // Teks apresiasi
           Expanded(
