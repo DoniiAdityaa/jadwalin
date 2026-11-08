@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+#
+# Git commit-msg hook to enforce Conventional Commits.
+# Checks the first line of the commit message against standard prefixes.
+#
+
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(head -n 1 "$COMMIT_MSG_FILE")
+
+# Allow merge commits
+if echo "$COMMIT_MSG" | grep -qE '^Merge branch'; then
+  exit 0
+fi
+
+# Allow revert commits
+if echo "$COMMIT_MSG" | grep -qE '^Revert '; then
+  exit 0
+fi
+
+# Conventional commit regex:
+# type(scope?): description
+PATTERN="^(feat|fix|docs|style|refactor|perf|test|chore|build|ci)(\([a-zA-Z0-9_\-]+\))?!?: .+$"
+
+if ! echo "$COMMIT_MSG" | grep -qE "$PATTERN"; then
+  echo ""
+  echo "❌ INVALID COMMIT MESSAGE FORMAT!"
+  echo ""
+  echo "Your message was:"
+  echo "  \"$COMMIT_MSG\""
+  echo ""
+  echo "Commit messages must follow the Conventional Commits format:"
+  echo "  <type>(<scope>): <description>"
+  echo ""
+  echo "Allowed types:"
+  echo "  feat     - A new feature"
+  echo "  fix      - A bug fix"
+  echo "  docs     - Documentation changes"
+  echo "  style    - Formatting, missing semicolons, etc."
+  echo "  refactor - Code change that neither fixes a bug nor adds a feature"
+  echo "  perf     - Performance improvement"
+  echo "  test     - Adding or fixing tests"
+  echo "  chore    - Build tools, dependencies, git configs"
+  echo ""
+  echo "Examples:"
+  echo "  feat(chat): add dismissible history row"
+  echo "  fix: resolve timeline drag offset"
+  echo "  docs: update setup guide in README"
+  echo ""
+  echo "See CONTRIBUTING.md for more details."
+  echo ""
+  exit 1
+fi
+
+exit 0
