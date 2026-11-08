@@ -34,8 +34,74 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  /// Tanggal yang dipilih di kalender.
+  final ScrollController _scrollController = ScrollController();
+
   DateTime? _selectedDate;
+  DateTime _currentMonth = DateTime.now();
+
+  /// Jarak dari atas layar saat kartu mulai menempel.
+  static const double _pinnedTop = 10.0;
+
+  /// Tinggi header user + padding (posisi kalender saat scroll = 0).
+  static const double _calendarRestTop = 74.0;
+
+  /// Scroll offset saat kartu sudah benar-benar menempel.
+  static const double _pinReachOffset = _calendarRestTop - _pinnedTop;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// 0.0 = 1 baris (collapsed), 1.0 = bulan penuh.
+  double _progressForOffset(double offset) {
+    // Mulai mengecil setelah 16px, selesai tepat saat kartu menempel.
+    const start = 16.0;
+    final span = _pinReachOffset - start;
+    if (span <= 0) return 1.0;
+    return (1.0 - ((offset - start) / span)).clamp(0.0, 1.0);
+  }
+
+  /// Geser vertikal kartu sebelum menempel.
+  double _translateForOffset(double offset) {
+    final travel = _calendarRestTop - _pinnedTop - offset;
+    return travel > 0 ? travel : 0.0;
+  }
+
+  /// Tanggal dipilih. Tap pada tanggal yang sama membuka detail kalender.
+  void _onDateSelected(DateTime date) {
+    final isSameSelected = _selectedDate != null &&
+        date.year == _selectedDate!.year &&
+        date.month == _selectedDate!.month &&
+        date.day == _selectedDate!.day;
+
+    if (!isSameSelected) {
+      setState(() {
+        _selectedDate = date;
+        _currentMonth = DateTime(date.year, date.month);
+      });
+      return;
+    }
+
+    final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+    if (offset < 8) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CalendarDetailScreen(initialDate: date),
+        ),
+      );
+    }
+  }
+
+  /// Tombol panah atas: balik ke paling atas, kalender otomatis mekar lagi.
+  void _scrollToTop() {
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 340),
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   /// Ambil jadwal hari ini, diurutkan berdasarkan jam mulai.
   List<_DummySchedule> get _todaySchedules {
@@ -103,91 +169,129 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: warmCanvasBg,
       body: SafeArea(
         bottom: false,
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1. Top Header User
-              _headerUser(),
-              const SizedBox(height: 16),
+        child: AnimatedBuilder(
+          animation: _scrollController,
+          builder: (context, _) {
+            final offset =
+                _scrollController.hasClients ? _scrollController.offset : 0.0;
+            final progress = _progressForOffset(offset);
+            final translateY = _translateForOffset(offset);
+            final isPinned = offset >= _pinReachOffset;
 
-              // 2. Compact Date Selector Card
-              _dateCard(),
-              const SizedBox(height: 18),
+            return Stack(
+              children: [
+                // Lapisan 1: Scrollable content (Header User + Spacer Kalender + Jadwal)
+                SingleChildScrollView(
+                  controller: _scrollController,
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header User
+                      _headerUser(),
+                      const SizedBox(height: 16),
 
-              // 3. Live Highlight Spotlight (Sedang Berlangsung / Berikutnya)
-              if (_highlightSchedule != null) ...[
-                LiveHighlightCard(
-                  title: _highlightSchedule!.title,
-                  location: _highlightSchedule!.location,
-                  start: _highlightSchedule!.start,
-                  end: _highlightSchedule!.end,
-                  category: _highlightSchedule!.category,
-                  iconAsset: _highlightSchedule!.iconAsset,
-                  accentColor: _highlightSchedule!.accentColor,
+                      // Spacer cadangan tempat kalender saat posisi normal.
+                      // Tinggi spacer mengecil seiring kalender mengkerut agar jadwal
+                      // naik secara mulus mengikuti jari tanpa loncat.
+                      SizedBox(
+                        height: 126.0 + (progress * (318.0 - 126.0)) + 18.0,
+                      ),
+
+                      // Live Highlight Spotlight
+                      if (_highlightSchedule != null) ...[
+                        LiveHighlightCard(
+                          title: _highlightSchedule!.title,
+                          location: _highlightSchedule!.location,
+                          start: _highlightSchedule!.start,
+                          end: _highlightSchedule!.end,
+                          category: _highlightSchedule!.category,
+                          iconAsset: _highlightSchedule!.iconAsset,
+                          accentColor: _highlightSchedule!.accentColor,
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+
+                      // Sesi Pagi
+                      _sessionHeader('🌅 Sesi Pagi (05:00 - 11:59)'),
+                      const SizedBox(height: 10),
+                      _scheduleCard(
+                        category: 'KULIAH',
+                        tagBg: const Color(0xFFEEF4FF),
+                        tagColor: const Color(0xFF2563EB),
+                        accentColor: const Color(0xFF2563EB),
+                        title: 'Kalkulus & Aljabar Linear',
+                        subtitle: '08:00 - 09:40 WIB • Gedung D (R. 302)',
+                      ),
+                      const SizedBox(height: 10),
+                      _scheduleCard(
+                        category: 'KULIAH',
+                        tagBg: const Color(0xFFEEF4FF),
+                        tagColor: const Color(0xFF2563EB),
+                        accentColor: const Color(0xFF2563EB),
+                        title: 'Algoritma & Pemrograman II',
+                        subtitle: '10:00 - 11:40 WIB • Lab Komputer 4',
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Sesi Siang
+                      _sessionHeader('☀️ Sesi Siang (12:00 - 17:59)'),
+                      const SizedBox(height: 10),
+                      _scheduleCard(
+                        category: 'ORGANISASI',
+                        tagBg: const Color(0xFFFFF7ED),
+                        tagColor: const Color(0xFFD97706),
+                        accentColor: const Color(0xFFD97706),
+                        title: 'Rapat Finalisasi Rundown Dies Natalis',
+                        subtitle: '13:30 - 15:00 WIB • Sekre BEM Gedung F',
+                        isConflict: true,
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Sesi Malam
+                      _sessionHeader('🌙 Sesi Malam (18:00 - 23:59)'),
+                      const SizedBox(height: 10),
+                      _scheduleCard(
+                        category: 'BOOTCAMP',
+                        tagBg: const Color(0xFFECFDF5),
+                        tagColor: const Color(0xFF059669),
+                        accentColor: const Color(0xFF059669),
+                        title: 'Flutter & Mobile Development',
+                        subtitle: '19:30 - 21:00 WIB • Online (Google Meet)',
+                      ),
+                      const SizedBox(height: 10),
+                      _scheduleCard(
+                        category: 'BOOTCAMP',
+                        tagBg: const Color(0xFFECFDF5),
+                        tagColor: const Color(0xFF059669),
+                        accentColor: const Color(0xFF059669),
+                        title: 'Flutter & Mobile Development',
+                        subtitle: '22.00 - 23:00 WIB • Online (Google Meet)',
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 24),
+
+                // Lapisan 2: SATU-SATUNYA Kalender.
+                // Naik perlahan dari top 74 ke top 10 saat scroll, lalu berhenti nempel (pinned).
+                Positioned(
+                  top: _pinnedTop + translateY,
+                  left: 20,
+                  right: 20,
+                  child: MiniCalendar(
+                    initialMonth: _currentMonth,
+                    selectedDate: _selectedDate,
+                    expandProgressOverride: progress,
+                    pinned: isPinned,
+                    onMonthChanged: (m) => setState(() => _currentMonth = m),
+                    onToggleRequested: _scrollToTop,
+                    onDateSelected: _onDateSelected,
+                  ),
+                ),
               ],
-
-              // 4. Sesi Pagi
-              _sessionHeader('🌅 Sesi Pagi (05:00 - 11:59)'),
-              const SizedBox(height: 10),
-              _scheduleCard(
-                category: 'KULIAH',
-                tagBg: const Color(0xFFEEF4FF),
-                tagColor: const Color(0xFF2563EB),
-                accentColor: const Color(0xFF2563EB),
-                title: 'Kalkulus & Aljabar Linear',
-                subtitle: '08:00 - 09:40 WIB • Gedung D (R. 302)',
-              ),
-              const SizedBox(height: 10),
-              _scheduleCard(
-                category: 'KULIAH',
-                tagBg: const Color(0xFFEEF4FF),
-                tagColor: const Color(0xFF2563EB),
-                accentColor: const Color(0xFF2563EB),
-                title: 'Algoritma & Pemrograman II',
-                subtitle: '10:00 - 11:40 WIB • Lab Komputer 4',
-              ),
-              const SizedBox(height: 24),
-
-              // 5. Sesi Siang
-              _sessionHeader('☀️ Sesi Siang (12:00 - 17:59)'),
-              const SizedBox(height: 10),
-              _scheduleCard(
-                category: 'ORGANISASI',
-                tagBg: const Color(0xFFFFF7ED),
-                tagColor: const Color(0xFFD97706),
-                accentColor: const Color(0xFFD97706),
-                title: 'Rapat Finalisasi Rundown Dies Natalis',
-                subtitle: '13:30 - 15:00 WIB • Sekre BEM Gedung F',
-                isConflict: true,
-              ),
-              const SizedBox(height: 24),
-
-              // 6. Sesi Malam
-              _sessionHeader('🌙 Sesi Malam (18:00 - 23:59)'),
-              const SizedBox(height: 10),
-              _scheduleCard(
-                category: 'BOOTCAMP',
-                tagBg: const Color(0xFFECFDF5),
-                tagColor: const Color(0xFF059669),
-                accentColor: const Color(0xFF059669),
-                title: 'Flutter & Mobile Development',
-                subtitle: '19:30 - 21:00 WIB • Online (Google Meet)',
-              ),
-              _scheduleCard(
-                category: 'BOOTCAMP',
-                tagBg: const Color(0xFFECFDF5),
-                tagColor: const Color(0xFF059669),
-                accentColor: const Color(0xFF059669),
-                title: 'Flutter & Mobile Development',
-                subtitle: '22.00 - 23:00 WIB • Online (Google Meet)',
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -262,30 +366,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  /// 2. Monthly Calendar (shared widget)
-  Widget _dateCard() {
-    return MiniCalendar(
-      selectedDate: _selectedDate,
-      onDateSelected: (date) {
-        // Tap tanggal belum terpilih -> select saja
-        final isSameSelected = _selectedDate != null &&
-            date.year == _selectedDate!.year &&
-            date.month == _selectedDate!.month &&
-            date.day == _selectedDate!.day;
-        if (!isSameSelected) {
-          setState(() => _selectedDate = date);
-          return;
-        }
-        // Tap tanggal yang sudah terpilih -> buka detail calendar
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => CalendarDetailScreen(initialDate: date),
-          ),
-        );
-      },
     );
   }
 

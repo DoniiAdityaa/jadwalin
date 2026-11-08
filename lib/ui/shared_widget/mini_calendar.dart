@@ -16,6 +16,26 @@ class CalendarEventDummy {
   }
 }
 
+/// Kontrol eksternal untuk memaksa [MiniCalendar] collapse / expand.
+class MiniCalendarController extends ChangeNotifier {
+  bool _requestedCollapsed = false;
+
+  /// True kalau parent (misal HomeScreen) minta kalender jadi 1 baris.
+  bool get requestedCollapsed => _requestedCollapsed;
+
+  void requestCollapse() {
+    if (_requestedCollapsed) return;
+    _requestedCollapsed = true;
+    notifyListeners();
+  }
+
+  void requestExpand() {
+    if (!_requestedCollapsed) return;
+    _requestedCollapsed = false;
+    notifyListeners();
+  }
+}
+
 /// Kalender Custom dengan animasi Collapse/Expand yang mengikuti jari baris per baris.
 ///
 /// - Geser ke atas: baris 5, 4, 3, dst ketutup bertahap sampai sisa 1 baris
@@ -30,6 +50,12 @@ class MiniCalendar extends StatefulWidget {
     this.onDateSelected,
     this.onMonthChanged,
     this.today,
+    this.controller,
+    this.onExpandToggled,
+    this.pinned = false,
+    this.onToggleRequested,
+    this.borderless = false,
+    this.expandProgressOverride,
   });
 
   final DateTime? initialMonth;
@@ -38,6 +64,26 @@ class MiniCalendar extends StatefulWidget {
   final ValueChanged<DateTime>? onDateSelected;
   final ValueChanged<DateTime>? onMonthChanged;
   final DateTime? today;
+  final MiniCalendarController? controller;
+
+  /// Callback saat user menekan tombol toggle panah atas/bawah.
+  /// Parameter [isExpanded] adalah status BARU setelah ditekan.
+  final ValueChanged<bool>? onExpandToggled;
+
+  /// Mode sticky: kalender dipaksa 1 baris dan tampil sebagai kartu compact.
+  final bool pinned;
+
+  /// Dipanggil saat user menekan tombol panah di mode [pinned].
+  /// Parent yang mengurus scroll ke atas + unlock mode sticky.
+  final VoidCallback? onToggleRequested;
+
+  /// Sudut & border kartu disembunyikan (sudah dibungkus oleh parent).
+  final bool borderless;
+
+  /// Nilai 0..1 dari parent untuk mengontrol tinggi secara langsung
+  /// (dipakai saat kalender di dalam SliverPersistentHeader).
+  /// Null = widget mengurus animasinya sendiri.
+  final double? expandProgressOverride;
 
   @override
   State<MiniCalendar> createState() => _MiniCalendarState();
@@ -99,10 +145,21 @@ class _MiniCalendarState extends State<MiniCalendar>
       });
 
     _weekPageController = PageController(initialPage: _weekPageIndex);
+    widget.controller?.addListener(_onControllerChanged);
+  }
+
+  void _onControllerChanged() {
+    final requested = widget.controller?.requestedCollapsed ?? false;
+    if (requested && _isExpanded) {
+      _animateToProgress(0.0);
+    } else if (!requested && !_isExpanded) {
+      _animateToProgress(1.0);
+    }
   }
 
   @override
   void dispose() {
+    widget.controller?.removeListener(_onControllerChanged);
     _animController.dispose();
     _weekPageController.dispose();
     super.dispose();
@@ -111,6 +168,17 @@ class _MiniCalendarState extends State<MiniCalendar>
   @override
   void didUpdateWidget(covariant MiniCalendar oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    if (widget.initialMonth != null &&
+        oldWidget.initialMonth != widget.initialMonth) {
+      final m = widget.initialMonth!;
+      if (m.year != _visibleMonth.year || m.month != _visibleMonth.month) {
+        setState(() {
+          _visibleMonth = DateTime(m.year, m.month);
+        });
+      }
+    }
+
     if (widget.selectedDate != null &&
         !_isSameDay(widget.selectedDate!, _selectedDate)) {
       setState(() {
@@ -195,10 +263,16 @@ class _MiniCalendarState extends State<MiniCalendar>
   }
 
   void _toggleFormat() {
-    _animateToProgress(_isExpanded ? 0.0 : 1.0);
+    if (widget.pinned) {
+      widget.onToggleRequested?.call();
+      return;
+    }
+    final nextExpanded = !_isExpanded;
+    widget.onExpandToggled?.call(nextExpanded);
+    _animateToProgress(nextExpanded ? 1.0 : 0.0);
   }
 
-  void _animateToProgress(double target) {
+  Future<void> _animateToProgress(double target) {
     _anim = Tween<double>(
       begin: _expandProgress,
       end: target,
@@ -206,7 +280,8 @@ class _MiniCalendarState extends State<MiniCalendar>
       parent: _animController,
       curve: Curves.easeOutCubic,
     ));
-    _animController.forward(from: 0.0).then((_) {
+    return _animController.forward(from: 0.0).then((_) {
+      if (!mounted) return;
       setState(() {
         _isExpanded = target == 1.0;
         _expandProgress = target;
@@ -255,28 +330,37 @@ class _MiniCalendarState extends State<MiniCalendar>
     final double singleRowHeight = _effectiveRowHeight;
     final double totalCollapseDistance = fullMonthHeight - singleRowHeight;
 
+    // Progress aktual: dari parent kalau di-override, kalau tidak pakai state lokal.
+    final double progress =
+        (widget.expandProgressOverride ?? _expandProgress).clamp(0.0, 1.0);
+
     // Tinggi saat ini yang sedang mengikuti jari / animasi
     final double currentHeight =
-        singleRowHeight + (_expandProgress * totalCollapseDistance);
+        singleRowHeight + (progress * totalCollapseDistance);
 
     // Offset vertical agar baris yang memuat tanggal aktif tetap terlihat saat collapse
     final double targetOffset = selectedRowIndex * _effectiveRowHeight;
-    final double currentVerticalOffset = targetOffset * (1.0 - _expandProgress);
+    final double currentVerticalOffset = targetOffset * (1.0 - progress);
 
-    final bool isFullyCollapsed = _expandProgress == 0.0;
+    final bool isFullyCollapsed = widget.pinned || progress <= 0.001;
+
+    final bool pinnedMode = widget.pinned;
 
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFEADBCE), width: 1),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
+        borderRadius: widget.borderless ? BorderRadius.zero : BorderRadius.circular(20),
+        border: widget.borderless
+            ? null
+            : Border.all(color: const Color(0xFFEADBCE), width: 1),
+        boxShadow: [
+          if (!pinnedMode)
+            const BoxShadow(
+              color: Color(0x0A000000),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
         ],
       ),
       child: Column(
@@ -284,12 +368,14 @@ class _MiniCalendarState extends State<MiniCalendar>
         children: [
           // 1. Header (Bulan + Chevron Navigasi + Toggle Icon)
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 14, 8),
+            padding: pinnedMode
+                ? const EdgeInsets.fromLTRB(14, 10, 10, 2)
+                : const EdgeInsets.fromLTRB(18, 16, 14, 8),
             child: Row(
               children: [
                 Text(
                   '${_monthNames[_visibleMonth.month - 1]} ${_visibleMonth.year}',
-                  style: mdBold.copyWith(
+                  style: (pinnedMode ? smBold : mdBold).copyWith(
                     color: darkEspresso,
                     letterSpacing: -0.2,
                   ),
@@ -330,7 +416,7 @@ class _MiniCalendarState extends State<MiniCalendar>
 
           // 2. Weekday Header Labels (Min, Sen, Sel, ...)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: EdgeInsets.symmetric(horizontal: pinnedMode ? 10 : 14),
             child: Row(
               children: List.generate(_weekdayLabels.length, (i) {
                 return Expanded(
@@ -348,16 +434,17 @@ class _MiniCalendarState extends State<MiniCalendar>
 
           // 3. Area Grid Kalender (Bisa di-drag vertikal baris demi baris)
           GestureDetector(
-            onVerticalDragUpdate: (d) =>
-                _onVerticalDragUpdate(d, totalCollapseDistance),
-            onVerticalDragEnd: _onVerticalDragEnd,
+            onVerticalDragUpdate: pinnedMode
+                ? null
+                : (d) => _onVerticalDragUpdate(d, totalCollapseDistance),
+            onVerticalDragEnd: pinnedMode ? null : _onVerticalDragEnd,
             behavior: HitTestBehavior.opaque,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding: EdgeInsets.symmetric(horizontal: pinnedMode ? 10 : 14),
               child: SizedBox(
-                height: currentHeight,
+                height: pinnedMode ? singleRowHeight : currentHeight,
                 child: ClipRect(
-                  child: isFullyCollapsed
+                  child: (pinnedMode || isFullyCollapsed)
                       ? _buildHorizontalWeekPager()
                       : _buildSlidingMonthGrid(
                           matrix: matrix,
@@ -368,7 +455,7 @@ class _MiniCalendarState extends State<MiniCalendar>
             ),
           ),
 
-          const SizedBox(height: 8),
+          SizedBox(height: pinnedMode ? 6 : 8),
         ],
       ),
     );
@@ -575,17 +662,20 @@ class _MiniCalendarState extends State<MiniCalendar>
   }
 
   Widget _expandToggleButton() {
+    final effectiveProgress =
+        widget.expandProgressOverride ?? (_isExpanded ? 1.0 : 0.0);
+    final showUpArrow = widget.pinned || effectiveProgress < 0.5;
     return GestureDetector(
       onTap: _toggleFormat,
       behavior: HitTestBehavior.opaque,
       child: Tooltip(
-        message: _isExpanded ? 'Tampilkan minggu' : 'Tampilkan bulan',
+        message: showUpArrow ? 'Tampilkan bulan' : 'Tampilkan minggu',
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           width: 32,
           height: 28,
           decoration: BoxDecoration(
-            color: !_isExpanded ? primaryColor : oatMilkPill,
+            color: showUpArrow ? primaryColor : oatMilkPill,
             borderRadius: BorderRadius.circular(9),
           ),
           child: Center(
@@ -601,14 +691,14 @@ class _MiniCalendarState extends State<MiniCalendar>
                 );
               },
               child: SvgPicture.asset(
-                !_isExpanded
+                showUpArrow
                     ? 'assets/svg/ic_chevron_up.svg'
                     : 'assets/svg/ic_chevron_down.svg',
-                key: ValueKey<bool>(_isExpanded),
+                key: ValueKey<bool>(showUpArrow),
                 width: 14,
                 height: 14,
                 colorFilter: ColorFilter.mode(
-                  !_isExpanded ? Colors.white : mutedTaupe,
+                  showUpArrow ? Colors.white : mutedTaupe,
                   BlendMode.srcIn,
                 ),
               ),
