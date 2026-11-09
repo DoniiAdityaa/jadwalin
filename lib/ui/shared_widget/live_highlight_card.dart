@@ -22,6 +22,7 @@ class LiveHighlightCard extends StatefulWidget {
     this.accentColor = const Color(0xFF2563EB),
     this.now,
     this.tickInterval = const Duration(seconds: 30),
+    this.dimmed = false,
   });
 
   final String title;
@@ -33,6 +34,10 @@ class LiveHighlightCard extends StatefulWidget {
   final Color accentColor;
   final DateTime? now;
   final Duration tickInterval;
+
+  /// Kalau true, seluruh kartu dibuat tenang (dipakai untuk kartu di belakang
+  /// tumpukan). Bukan sama dengan status "SELESAI".
+  final bool dimmed;
 
   @override
   State<LiveHighlightCard> createState() => _LiveHighlightCardState();
@@ -55,7 +60,19 @@ class _LiveHighlightCardState extends State<LiveHighlightCard> {
   @override
   void initState() {
     super.initState();
-    if (widget.now == null) {
+    _syncTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant LiveHighlightCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.dimmed != widget.dimmed) _syncTimer();
+  }
+
+  void _syncTimer() {
+    _timer?.cancel();
+    _timer = null;
+    if (widget.now == null && !widget.dimmed) {
       _timer = Timer.periodic(widget.tickInterval, (_) {
         if (mounted) setState(() {});
       });
@@ -95,7 +112,10 @@ class _LiveHighlightCardState extends State<LiveHighlightCard> {
     final isUpcoming = _state == HighlightState.upcoming;
     final isDone = _state == HighlightState.none;
 
-    final accent = isDone ? mutedTaupe : widget.accentColor;
+    // Dimmed = dipakai di kartu belakang tumpukan (tidak terkait status selesai)
+    final effectiveAccent =
+        widget.dimmed ? mutedTaupe : (isDone ? mutedTaupe : widget.accentColor);
+    final accent = effectiveAccent;
     final label = isLive
         ? 'SEDANG BERLANGSUNG'
         : isUpcoming
@@ -108,11 +128,11 @@ class _LiveHighlightCardState extends State<LiveHighlightCard> {
             : 'Sudah lewat';
 
     return Opacity(
-      opacity: isDone ? 0.55 : 1,
+      opacity: isDone ? 0.6 : 1,
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: widget.dimmed ? const Color(0xFFFDFAF7) : Colors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: isLive
@@ -144,7 +164,7 @@ class _LiveHighlightCardState extends State<LiveHighlightCard> {
                     children: [
                       Row(
                         children: [
-                          if (isLive) ...[
+                          if (isLive && !widget.dimmed) ...[
                             _PulseDot(color: accent),
                             const SizedBox(width: 5),
                           ],
@@ -213,7 +233,7 @@ class _LiveHighlightCardState extends State<LiveHighlightCard> {
                           ),
                         ],
                       ),
-                      if (isLive) ...[
+                      if (isLive && !widget.dimmed) ...[
                         const SizedBox(height: 10),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(3),

@@ -157,6 +157,8 @@ class _DattioAiStudioSheetState extends State<DattioAiStudioSheet>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      _buildManualButton(),
+                      const SizedBox(height: 14),
                       _buildPrivacyHint(),
                     ],
                   ),
@@ -294,32 +296,6 @@ class _DattioAiStudioSheetState extends State<DattioAiStudioSheet>
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.45),
                 borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
-
-          // Tombol tutup
-          Positioned(
-            top: 12,
-            right: 14,
-            child: Material(
-              color: Colors.white.withValues(alpha: 0.16),
-              shape: const CircleBorder(),
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: () => Navigator.of(context).maybePop(),
-                child: Padding(
-                  padding: const EdgeInsets.all(7),
-                  child: SvgPicture.asset(
-                    'assets/svg/ic_close.svg',
-                    width: 16,
-                    height: 16,
-                    colorFilter: const ColorFilter.mode(
-                      Colors.white,
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                ),
               ),
             ),
           ),

@@ -496,10 +496,13 @@ class _MainNavigationState extends State<MainNavigation>
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 320),
                   curve: Curves.easeOutCubic,
-                  height: _isChatMode ? 58 : 72,
+                  constraints: BoxConstraints(
+                    minHeight: _isChatMode ? 58 : 72,
+                    maxHeight: _isChatMode ? 140 : 72,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(_isChatMode ? 29 : 36),
+                    borderRadius: BorderRadius.circular(_isChatMode ? 26 : 36),
                     border: _isChatMode
                         ? Border.all(color: const Color(0xFFEADBCE), width: 1)
                         : null,
@@ -606,31 +609,34 @@ class _MainNavigationState extends State<MainNavigation>
   Widget _buildChatInputBar() {
     return Padding(
       key: const ValueKey('chat_input'),
-      padding: const EdgeInsets.symmetric(horizontal: 6),
+      padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // Tombol plus: pilih sumber lampiran (Gambar / PDF)
-          BouncingTap(
-            scaleDown: 0.9,
-            child: InkWell(
-              onTap: _showAttachmentSheet,
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                width: 42,
-                height: 42,
-                decoration: const BoxDecoration(
-                  color: oatMilkPill,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: SvgPicture.asset(
-                  'assets/svg/ic_plus.svg',
-                  width: 18,
-                  height: 18,
-                  colorFilter: const ColorFilter.mode(
-                    primaryColor,
-                    BlendMode.srcIn,
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: BouncingTap(
+              scaleDown: 0.9,
+              child: InkWell(
+                onTap: _showAttachmentSheet,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: const BoxDecoration(
+                    color: oatMilkPill,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: SvgPicture.asset(
+                    'assets/svg/ic_plus.svg',
+                    width: 18,
+                    height: 18,
+                    colorFilter: const ColorFilter.mode(
+                      primaryColor,
+                      BlendMode.srcIn,
+                    ),
                   ),
                 ),
               ),
@@ -639,26 +645,30 @@ class _MainNavigationState extends State<MainNavigation>
 
           const SizedBox(width: 8),
 
-          // Text Field "Tulis pesan..."
+          // Text Field "Tulis pesan..." — multiline expanding (max 4 baris)
           Expanded(
-            child: TextField(
-              controller: _chatInputController,
-              focusNode: _chatInputFocusNode,
-              style: smMedium.copyWith(color: darkEspresso),
-              maxLines: 1,
-              textAlignVertical: TextAlignVertical.center,
-              onChanged: _onChatInputChanged,
-              onSubmitted: (_) => _sendFromBottomBar(),
-              decoration: InputDecoration(
-                hintText: 'Tulis pesan...',
-                hintStyle: smRegular.copyWith(color: mutedTaupe),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 4,
-                  vertical: 10,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: TextField(
+                controller: _chatInputController,
+                focusNode: _chatInputFocusNode,
+                style: smMedium.copyWith(color: darkEspresso),
+                keyboardType: TextInputType.multiline,
+                maxLines: 4,
+                minLines: 1,
+                textInputAction: TextInputAction.newline,
+                onChanged: _onChatInputChanged,
+                decoration: InputDecoration(
+                  hintText: 'Tulis pesan...',
+                  hintStyle: smRegular.copyWith(color: mutedTaupe),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 10,
+                  ),
                 ),
               ),
             ),
@@ -667,61 +677,64 @@ class _MainNavigationState extends State<MainNavigation>
           const SizedBox(width: 8),
 
           // Tombol aksi: Buka Sidebar Drawer AI / Kirim Pesan
-          BouncingTap(
-            scaleDown: 0.9,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              transitionBuilder: (child, animation) => ScaleTransition(
-                scale: animation,
-                child: FadeTransition(opacity: animation, child: child),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: BouncingTap(
+              scaleDown: 0.9,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                transitionBuilder: (child, animation) => ScaleTransition(
+                  scale: animation,
+                  child: FadeTransition(opacity: animation, child: child),
+                ),
+                child: _hasChatText
+                    ? InkWell(
+                        key: const ValueKey('send_btn'),
+                        onTap: _sendFromBottomBar,
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: const BoxDecoration(
+                            color: primaryColor,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: SvgPicture.asset(
+                            'assets/svg/ic_send.svg',
+                            width: 18,
+                            height: 18,
+                            colorFilter: const ColorFilter.mode(
+                              Colors.white,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                        ),
+                      )
+                    : InkWell(
+                        key: const ValueKey('mic_btn'),
+                        onTap: _onVoiceNoteTapped,
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: const BoxDecoration(
+                            color: oatMilkPill,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: SvgPicture.asset(
+                            'assets/svg/ic_mic.svg',
+                            width: 18,
+                            height: 18,
+                            colorFilter: const ColorFilter.mode(
+                              primaryColor,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                        ),
+                      ),
               ),
-              child: _hasChatText
-                  ? InkWell(
-                      key: const ValueKey('send_btn'),
-                      onTap: _sendFromBottomBar,
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        width: 42,
-                        height: 42,
-                        decoration: const BoxDecoration(
-                          color: primaryColor,
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: SvgPicture.asset(
-                          'assets/svg/ic_send.svg',
-                          width: 18,
-                          height: 18,
-                          colorFilter: const ColorFilter.mode(
-                            Colors.white,
-                            BlendMode.srcIn,
-                          ),
-                        ),
-                      ),
-                    )
-                  : InkWell(
-                      key: const ValueKey('mic_btn'),
-                      onTap: _onVoiceNoteTapped,
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        width: 42,
-                        height: 42,
-                        decoration: const BoxDecoration(
-                          color: oatMilkPill,
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: SvgPicture.asset(
-                          'assets/svg/ic_mic.svg',
-                          width: 18,
-                          height: 18,
-                          colorFilter: const ColorFilter.mode(
-                            primaryColor,
-                            BlendMode.srcIn,
-                          ),
-                        ),
-                      ),
-                    ),
             ),
           ),
         ],

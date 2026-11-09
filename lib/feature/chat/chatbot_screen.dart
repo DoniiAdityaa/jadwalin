@@ -6,8 +6,8 @@ import 'package:jadwalin/data/local/models.dart';
 import 'package:jadwalin/data/local/user_memory_dao.dart';
 import 'package:jadwalin/data/service/ai_chat_service.dart';
 import 'package:jadwalin/ui/color.dart';
+import 'package:jadwalin/ui/shared_widget/chat_message_bubble.dart';
 import 'package:jadwalin/ui/typography.dart';
-import 'package:lottie/lottie.dart';
 
 /// State yang bisa dikendalikan dari luar (MainNavigation / Sidebar).
 abstract class ChatbotScreenState extends State<ChatbotScreen> {
@@ -105,9 +105,11 @@ class _ChatbotScreenState extends ChatbotScreenState {
             },
           ),
         );
-      _lastAddedIndex = _messages.isEmpty ? null : _messages.length - 1;
+      // Buka riwayat: langsung posisikan di pesan terakhir tanpa animasi.
+      _lastAddedIndex = null;
+      _isTyping = false;
     });
-    _scrollToBottom();
+    _jumpToBottom();
   }
 
   @override
@@ -124,6 +126,7 @@ class _ChatbotScreenState extends ChatbotScreenState {
       _lastAddedIndex = null;
       _isTyping = false;
     });
+    _jumpToBottom();
   }
 
   @override
@@ -153,6 +156,21 @@ class _ChatbotScreenState extends ChatbotScreenState {
         duration: const Duration(milliseconds: 340),
         curve: Curves.easeOutCubic,
       );
+    });
+  }
+
+  /// Lompat instan ke pesan paling bawah (dipakai saat membuka riwayat chat).
+  /// Dua frame ditunggu agar ListView sempat mengukur tinggi konten baru.
+  void _jumpToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+
+      // Frame kedua: layout kadang belum final saat isi list berubah drastis.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      });
     });
   }
 
@@ -275,12 +293,6 @@ class _ChatbotScreenState extends ChatbotScreenState {
     widget.onSessionCreated?.call();
   }
 
-  String _formatTime(DateTime dt) {
-    final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '$h:$m WIB';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -396,50 +408,25 @@ class _ChatbotScreenState extends ChatbotScreenState {
                         16,
                         12,
                         16,
-                        widget.showInputBar ? 100 : 88,
+                        widget.showInputBar ? 140 : 104,
                       ),
                       physics: const BouncingScrollPhysics(),
                       itemCount: _messages.length + (_isTyping ? 1 : 0),
                       itemBuilder: (context, index) {
                         if (index == _messages.length && _isTyping) {
-                          return _typingBubble();
+                          return const TypingBubble();
                         }
                         final msg = _messages[index];
                         final isNewest = index == _lastAddedIndex;
-                        final isSingleGreeting =
-                            _messages.length == 1 && !msg['isFromUser'];
 
-                        Widget bubble = _chatBubble(
-                          text: msg['text'] as String,
-                          isUser: msg['isFromUser'] as bool,
-                          timestamp: msg['timestamp'] as DateTime,
-                        );
-
-                        // Saat chat kosong / baru mulai, beri orb mengambang di atas sapaan.
-                        if (isSingleGreeting) {
-                          bubble = Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const SizedBox(height: 18),
-                              SizedBox(
-                                width: 120,
-                                height: 120,
-                                child: Lottie.asset(
-                                  'assets/animation/ai_orb.json',
-                                  fit: BoxFit.contain,
-                                  repeat: true,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              bubble,
-                            ],
-                          );
-                        }
-
-                        return _AnimatedMessageEntry(
+                        return AnimatedMessageEntry(
                           key: ValueKey(index),
                           animate: isNewest,
-                          child: bubble,
+                          child: ChatMessageBubble(
+                            text: msg['text'] as String,
+                            isUser: msg['isFromUser'] as bool,
+                            timestamp: msg['timestamp'] as DateTime,
+                          ),
                         );
                       },
                     ),
@@ -474,76 +461,88 @@ class _ChatbotScreenState extends ChatbotScreenState {
                               ],
                             ),
                             child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 // Tombol plus (kiri)
-                                _circleButton(
-                                  icon: 'assets/svg/ic_plus.svg',
-                                  filled: false,
-                                  onTap: () {},
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 2),
+                                  child: _circleButton(
+                                    icon: 'assets/svg/ic_plus.svg',
+                                    filled: false,
+                                    onTap: () {},
+                                  ),
                                 ),
 
                                 const SizedBox(width: 10),
 
-                                // Text input
+                                // Text input — teks panjang turun ke baris baru
                                 Expanded(
-                                  child: TextField(
-                                    controller: _textController,
-                                    focusNode: _focusNode,
-                                    style:
-                                        smMedium.copyWith(color: darkEspresso),
-                                    maxLines: 4,
-                                    minLines: 1,
-                                    textAlignVertical: TextAlignVertical.center,
-                                    onChanged: _onTextChanged,
-                                    decoration: InputDecoration(
-                                      hintText: 'Tulis pesan...',
-                                      hintStyle:
-                                          smRegular.copyWith(color: mutedTaupe),
-                                      border: InputBorder.none,
-                                      enabledBorder: InputBorder.none,
-                                      focusedBorder: InputBorder.none,
-                                      disabledBorder: InputBorder.none,
-                                      errorBorder: InputBorder.none,
-                                      focusedErrorBorder: InputBorder.none,
-                                      filled: false,
-                                      isDense: true,
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                        horizontal: 2,
-                                        vertical: 10,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 2,
+                                    ),
+                                    child: TextField(
+                                      controller: _textController,
+                                      focusNode: _focusNode,
+                                      style: smMedium.copyWith(
+                                        color: darkEspresso,
+                                      ),
+                                      keyboardType: TextInputType.multiline,
+                                      maxLines: 4,
+                                      minLines: 1,
+                                      onChanged: _onTextChanged,
+                                      decoration: InputDecoration(
+                                        hintText: 'Tulis pesan...',
+                                        hintStyle: smRegular.copyWith(
+                                          color: mutedTaupe,
+                                        ),
+                                        border: InputBorder.none,
+                                        enabledBorder: InputBorder.none,
+                                        focusedBorder: InputBorder.none,
+                                        disabledBorder: InputBorder.none,
+                                        errorBorder: InputBorder.none,
+                                        focusedErrorBorder: InputBorder.none,
+                                        filled: false,
+                                        isDense: true,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                          horizontal: 2,
+                                          vertical: 10,
+                                        ),
                                       ),
                                     ),
-                                    onSubmitted: (_) => _sendMessage(),
                                   ),
                                 ),
 
                                 const SizedBox(width: 10),
 
                                 // Tombol kanan: mic (kosong) / send (ada teks)
-                                AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 180),
-                                  transitionBuilder: (child, animation) =>
-                                      ScaleTransition(
-                                    scale: animation,
-                                    child: FadeTransition(
-                                      opacity: animation,
-                                      child: child,
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 2),
+                                  child: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 180),
+                                    transitionBuilder: (child, animation) =>
+                                        ScaleTransition(
+                                      scale: animation,
+                                      child: FadeTransition(
+                                        opacity: animation,
+                                        child: child,
+                                      ),
                                     ),
+                                    child: _hasText
+                                        ? _circleButton(
+                                            key: const ValueKey('send'),
+                                            icon: 'assets/svg/ic_send.svg',
+                                            filled: true,
+                                            onTap: _sendMessage,
+                                          )
+                                        : _circleButton(
+                                            key: const ValueKey('mic'),
+                                            icon: 'assets/svg/ic_mic.svg',
+                                            filled: true,
+                                            onTap: () {},
+                                          ),
                                   ),
-                                  child: _hasText
-                                      ? _circleButton(
-                                          key: const ValueKey('send'),
-                                          icon: 'assets/svg/ic_send.svg',
-                                          filled: true,
-                                          onTap: _sendMessage,
-                                        )
-                                      : _circleButton(
-                                          key: const ValueKey('mic'),
-                                          icon: 'assets/svg/ic_mic.svg',
-                                          filled: true,
-                                          onTap: () {},
-                                        ),
                                 ),
                               ],
                             ),
@@ -601,406 +600,4 @@ class _ChatbotScreenState extends ChatbotScreenState {
       ),
     );
   }
-
-  /// Indikator bot sedang mengetik (tiga titik berdenyut).
-  Widget _typingBubble() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            margin: const EdgeInsets.only(right: 10),
-            decoration: const BoxDecoration(
-              color: primaryColor50,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: SvgPicture.asset(
-              'assets/svg/ic_sparkles.svg',
-              width: 14,
-              height: 14,
-              colorFilter: const ColorFilter.mode(
-                primaryColor,
-                BlendMode.srcIn,
-              ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(18),
-                topRight: Radius.circular(18),
-                bottomRight: Radius.circular(18),
-                bottomLeft: Radius.circular(6),
-              ),
-              border: Border.all(color: const Color(0xFFEADBCE), width: 1),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 26,
-                  height: 26,
-                  child: Lottie.asset(
-                    'assets/animation/ai_thinking.json',
-                    fit: BoxFit.contain,
-                    repeat: true,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                _TypingDots(),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Teks bubble dengan dukungan Markdown ringan (**bold**, bullet).
-  Widget _formattedText({
-    required String text,
-    required bool isUser,
-  }) {
-    return _FormattedMessageText(text: text, isUser: isUser);
-  }
-
-  /// Widget Bubble Chat (method langsung di dalam State, konsisten tanpa class terpisah)
-  Widget _chatBubble({
-    required String text,
-    required bool isUser,
-    required DateTime timestamp,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisAlignment:
-            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        children: [
-          // Avatar Bot (hanya muncul di bubble bot)
-          if (!isUser) ...[
-            Container(
-              width: 28,
-              height: 28,
-              margin: const EdgeInsets.only(right: 10),
-              decoration: const BoxDecoration(
-                color: primaryColor50,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: SvgPicture.asset(
-                'assets/svg/ic_sparkles.svg',
-                width: 14,
-                height: 14,
-                colorFilter: const ColorFilter.mode(
-                  primaryColor,
-                  BlendMode.srcIn,
-                ),
-              ),
-            ),
-          ],
-
-          // Bubble
-          Flexible(
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.75,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: isUser
-                    ? const LinearGradient(
-                        colors: [primaryColor, Color(0xFF8B6B4D)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : null,
-                color: isUser ? null : Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: isUser
-                    ? null
-                    : Border.all(color: const Color(0xFFEADBCE), width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF261C14).withValues(alpha: 0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment:
-                    isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                children: [
-                  _formattedText(
-                    text: text,
-                    isUser: isUser,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatTime(timestamp),
-                    style: TextStyle(
-                      fontFamily: 'Plus Jakarta Sans',
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: isUser
-                          ? Colors.white.withValues(alpha: 0.75)
-                          : mutedTaupe.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          if (isUser) const SizedBox(width: 8),
-        ],
-      ),
-    );
-  }
-}
-
-/// Pembungkus animasi masuk untuk pesan baru (fade + slide up halus).
-class _AnimatedMessageEntry extends StatefulWidget {
-  const _AnimatedMessageEntry({
-    super.key,
-    required this.animate,
-    required this.child,
-  });
-
-  final bool animate;
-  final Widget child;
-
-  @override
-  State<_AnimatedMessageEntry> createState() => _AnimatedMessageEntryState();
-}
-
-class _AnimatedMessageEntryState extends State<_AnimatedMessageEntry>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _fade;
-  late final Animation<Offset> _slide;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 320),
-      value: widget.animate ? 0.0 : 1.0,
-    );
-    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    _slide = Tween<Offset>(
-      begin: const Offset(0, 0.18),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
-    if (widget.animate) _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fade,
-      child: SlideTransition(position: _slide, child: widget.child),
-    );
-  }
-}
-
-/// Tiga titik berdenyut untuk indikator "bot sedang mengetik".
-class _TypingDots extends StatefulWidget {
-  const _TypingDots();
-
-  @override
-  State<_TypingDots> createState() => _TypingDotsState();
-}
-
-class _TypingDotsState extends State<_TypingDots>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1200),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(3, (i) {
-            final t = (_controller.value * 3 - i).clamp(0.0, 1.0);
-            final opacity = 0.35 + 0.65 * (t < 0.5 ? t * 2 : (1 - t) * 2);
-            return Container(
-              width: 7,
-              height: 7,
-              margin: EdgeInsets.only(right: i == 2 ? 0 : 5),
-              decoration: BoxDecoration(
-                color: primaryColor.withValues(alpha: opacity),
-                shape: BoxShape.circle,
-              ),
-            );
-          }),
-        );
-      },
-    );
-  }
-}
-
-/// Parser Markdown ringan: **bold**, *italic*, bullet `- `, dan baris baru.
-/// Dipakai di dalam bubble chat agar balasan AI tampil rapi.
-class _FormattedMessageText extends StatelessWidget {
-  const _FormattedMessageText({
-    required this.text,
-    required this.isUser,
-  });
-
-  final String text;
-  final bool isUser;
-
-  static final RegExp _boldPattern = RegExp(r'\*\*(.+?)\*\*');
-  static final RegExp _italicPattern =
-      RegExp(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)');
-
-  @override
-  Widget build(BuildContext context) {
-    final base = TextStyle(
-      fontFamily: 'Plus Jakarta Sans',
-      fontSize: 14,
-      fontWeight: FontWeight.w400,
-      color: isUser ? Colors.white : darkEspresso,
-      height: 1.4,
-    );
-
-    final lines = text.split('\n');
-    final children = <Widget>[];
-
-    for (var i = 0; i < lines.length; i++) {
-      final line = lines[i];
-      if (line.trim().isEmpty) {
-        children.add(const SizedBox(height: 6));
-        continue;
-      }
-      final isBullet =
-          line.trimLeft().startsWith('- ') || line.trimLeft().startsWith('• ');
-
-      final content = isBullet ? line.trimLeft().substring(2) : line;
-
-      final spans = _buildSpans(content, base);
-
-      if (isBullet) {
-        spans.insert(
-          0,
-          TextSpan(
-            text: '• ',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              color:
-                  isUser ? Colors.white.withValues(alpha: 0.8) : primaryColor,
-            ),
-          ),
-        );
-      }
-
-      children.add(
-        Padding(
-          padding: EdgeInsets.only(
-            bottom: i == lines.length - 1 ? 0 : 3,
-            left: isBullet ? 4 : 0,
-          ),
-          child: Text.rich(
-            TextSpan(style: base, children: spans),
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment:
-          isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: children,
-    );
-  }
-
-  List<TextSpan> _buildSpans(String input, TextStyle base) {
-    final spans = <TextSpan>[];
-    var cursor = 0;
-
-    // Kumpulkan semua match bold + italic, urut posisi.
-    final matches = <_InlineMatch>[
-      ..._boldPattern.allMatches(input).map(
-            (m) => _InlineMatch(
-              start: m.start,
-              end: m.end,
-              content: m.group(1)!,
-              weight: FontWeight.w700,
-            ),
-          ),
-      ..._italicPattern.allMatches(input).map(
-            (m) => _InlineMatch(
-              start: m.start,
-              end: m.end,
-              content: m.group(1)!,
-              style: FontStyle.italic,
-            ),
-          ),
-    ]..sort((a, b) => a.start.compareTo(b.start));
-
-    for (final m in matches) {
-      if (m.start < cursor) continue; // lewati yang tumpang tindih
-      if (m.start > cursor) {
-        spans.add(TextSpan(text: input.substring(cursor, m.start)));
-      }
-      spans.add(
-        TextSpan(
-          text: m.content,
-          style: TextStyle(fontWeight: m.weight, fontStyle: m.style),
-        ),
-      );
-      cursor = m.end;
-    }
-
-    if (cursor < input.length) {
-      spans.add(TextSpan(text: input.substring(cursor)));
-    }
-
-    return spans;
-  }
-}
-
-class _InlineMatch {
-  const _InlineMatch({
-    required this.start,
-    required this.end,
-    required this.content,
-    this.weight,
-    this.style,
-  });
-
-  final int start;
-  final int end;
-  final String content;
-  final FontWeight? weight;
-  final FontStyle? style;
 }

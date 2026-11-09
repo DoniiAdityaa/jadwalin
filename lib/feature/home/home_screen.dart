@@ -6,9 +6,9 @@ import 'package:jadwalin/ui/color.dart';
 import 'package:jadwalin/ui/shared_widget/all_done_card.dart';
 import 'package:jadwalin/ui/shared_widget/bouncing_tap.dart';
 import 'package:jadwalin/ui/shared_widget/empty_highlight_card.dart';
-import 'package:jadwalin/ui/shared_widget/live_highlight_card.dart';
 import 'package:jadwalin/ui/shared_widget/mini_calendar.dart';
 import 'package:jadwalin/ui/shared_widget/shared_axis_route.dart';
+import 'package:jadwalin/ui/shared_widget/stacked_highlight_cards.dart';
 import 'package:jadwalin/ui/shared_widget/staggered_entrance.dart';
 
 /// Model jadwal sederhana (dummy, belum pakai data layer).
@@ -156,29 +156,43 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
   }
 
-  /// Jadwal yang sedang berlangsung atau yang berikutnya HARI INI.
-  /// Jika semua sudah lewat atau kosong, kembalikan null.
-  _DummySchedule? get _activeHighlightSchedule {
-    final now = DateTime.now();
-    final list = _todaySchedules;
-
-    // 1. Sedang berlangsung sekarang
-    for (final s in list) {
-      if (now.isAfter(s.start) && now.isBefore(s.end)) return s;
-    }
-    // 2. Berikutnya yang belum mulai
-    for (final s in list) {
-      if (now.isBefore(s.start)) return s;
-    }
-    // 3. Jangan fallback ke list.last (agar tidak muncul kartu abu-abu selesai)
-    return null;
-  }
-
   /// True jika seluruh jadwal hari ini sudah lewat jamnya.
   bool get _isAllDoneToday {
     if (_todaySchedules.isEmpty) return false;
     final now = DateTime.now();
     return _todaySchedules.every((s) => now.isAfter(s.end));
+  }
+
+  /// Daftar item tumpukan highlight untuk semua agenda hari ini.
+  List<HighlightCardItem> get _highlightItems {
+    return _todaySchedules
+        .map(
+          (s) => HighlightCardItem(
+            title: s.title,
+            location: s.location,
+            start: s.start,
+            end: s.end,
+            category: s.category,
+            iconAsset: s.iconAsset,
+            accentColor: s.accentColor,
+          ),
+        )
+        .toList();
+  }
+
+  /// Index awal tumpukan: fokus ke agenda live / berikutnya terdekat.
+  /// Kalau semua sudah lewat atau kosong, mulai dari kartu pertama.
+  int get _highlightInitialIndex {
+    final list = _todaySchedules;
+    if (list.isEmpty) return 0;
+    final now = DateTime.now();
+    for (var i = 0; i < list.length; i++) {
+      if (now.isAfter(list[i].start) && now.isBefore(list[i].end)) return i;
+    }
+    for (var i = 0; i < list.length; i++) {
+      if (now.isBefore(list[i].start)) return i;
+    }
+    return 0;
   }
 
   @override
@@ -218,18 +232,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
 
                       // Live Highlight Spotlight
-                      // 1. Sedang ada agenda live / berikutnya -> kartu live aktif
-                      if (_activeHighlightSchedule != null) ...[
+                      // 1. Ada agenda hari ini -> tumpukan kartu bisa di-swipe
+                      if (_todaySchedules.isNotEmpty && !_isAllDoneToday) ...[
                         _reveal(
                           0,
-                          LiveHighlightCard(
-                            title: _activeHighlightSchedule!.title,
-                            location: _activeHighlightSchedule!.location,
-                            start: _activeHighlightSchedule!.start,
-                            end: _activeHighlightSchedule!.end,
-                            category: _activeHighlightSchedule!.category,
-                            iconAsset: _activeHighlightSchedule!.iconAsset,
-                            accentColor: _activeHighlightSchedule!.accentColor,
+                          StackedHighlightCards(
+                            key: ValueKey(_todaySchedules.length),
+                            items: _highlightItems,
+                            initialIndex: _highlightInitialIndex,
                           ),
                         ),
                         const SizedBox(height: 24),
